@@ -403,7 +403,6 @@ local function GiveStartingGear(player)
             player:EquipItem(itemID, slotID)
         end
     end
-
     player:SendBroadcastMessage("Your starting gear has been equipped.")
 end
 
@@ -691,6 +690,7 @@ local function DoPrestige(player, draftMode)
         -- If draftMode, immediately kick and schedule class change
         if draftMode then
             local guidLow = plr:GetGUIDLow()  -- Cache the GUID before logout
+            plr:AddItem(46978,1) -- All in one totem
             plr:KickPlayer()
             CreateLuaEvent(function()
                 CharDBExecute("UPDATE characters SET class = 8 WHERE guid = " .. guidLow)

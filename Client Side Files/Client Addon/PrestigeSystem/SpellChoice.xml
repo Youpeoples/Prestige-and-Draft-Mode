@@ -3,11 +3,13 @@
     xsi:schemaLocation="http://www.blizzard.com/wow/ui/ ..\FrameXML\UI.xsd">
 
   <!-- Virtual Template for Spell Choice Button -->
-  <Button name="SpellChoiceButtonTemplate" virtual="true">
+<Button name="SpellChoiceButtonTemplate" virtual="true" enableMouse="true">
   <Size><AbsDimension x="256" y="256"/></Size>
+  <HitRectInsets left="0" right="0" top="0" bottom="0"/>
+
   <Layers>
 
-    <!-- Background Layer -->
+    <!-- Background -->
     <Layer level="BACKGROUND">
       <Texture name="$parentBackground" file="Interface\AddOns\PrestigeSystem\Textures\card.tga">
         <Anchors>
@@ -17,28 +19,27 @@
       </Texture>
     </Layer>
 
-    <!-- Spell Name at Top -->
+    <!-- Spell Name -->
     <Layer level="ARTWORK">
       <FontString name="$parentName" inherits="GameFontNormal" justifyH="CENTER">
         <Anchors>
-          <Anchor point="TOP" x="0" y="-36"/> <!-- Lower than before -->
+          <Anchor point="TOP" x="0" y="-36"/>
         </Anchors>
       </FontString>
     </Layer>
 
-    <!-- Icon BELOW name -->
-    <Layer level="OVERLAY">
-      <Texture name="$parentIcon">
-        <Size><AbsDimension x="40" y="40"/></Size>
+    <!-- Icon -->
+    <Layer level="ARTWORK">
+      <Texture name="$parentIcon" file="Interface\\Icons\\INV_Misc_QuestionMark" setAllPoints="false">
+        <Size x="40" y="40"/>
         <Anchors>
-          <Anchor point="TOP" relativeTo="$parentName" relativePoint="BOTTOM" x="0" y="-20"/> <!-- Lower -->
+          <Anchor point="TOP" relativeTo="$parentName" relativePoint="BOTTOM" x="0" y="-20"/>
         </Anchors>
       </Texture>
     </Layer>
 
-    <!-- Description BELOW icon -->
+    <!-- Description -->
     <Layer level="OVERLAY">
-      <!-- Mana -->
       <FontString name="$parentMana" inherits="GameFontHighlightSmall">
         <Anchors>
           <Anchor point="TOP" relativeTo="$parentIcon" relativePoint="BOTTOM" x="0" y="-4"/>
@@ -46,7 +47,6 @@
         <JustifyH>CENTER</JustifyH>
       </FontString>
 
-      <!-- Cast Time -->
       <FontString name="$parentCastTime" inherits="GameFontHighlightSmall">
         <Anchors>
           <Anchor point="TOP" relativeTo="$parentMana" relativePoint="BOTTOM" x="0" y="0"/>
@@ -54,7 +54,6 @@
         <JustifyH>CENTER</JustifyH>
       </FontString>
 
-      <!-- Description -->
       <FontString name="$parentDescription" inherits="GameFontHighlightSmall">
         <Size><AbsDimension x="146" y="80"/></Size>
         <Anchors>
@@ -67,17 +66,16 @@
       </FontString>
     </Layer>
 
-    <!-- Required level above bottom -->
     <Layer level="OVERLAY">
       <FontString name="$parentLevelReq" inherits="GameFontNormalSmall">
         <Anchors>
-          <Anchor point="BOTTOM" x="0" y="51"/> <!-- Raised up from bottom -->
+          <Anchor point="BOTTOM" x="0" y="51"/>
         </Anchors>
         <Color r="1.0" g="0.82" b="0.0"/>
       </FontString>
     </Layer>
 
-    <!-- Highlight Glow Layer -->
+    <!-- Highlight Glow -->
     <Layer level="HIGHLIGHT">
       <Texture name="$parentHighlight" file="Interface\AddOns\PrestigeSystem\Textures\card.tga" alphaMode="ADD">
         <Size><AbsDimension x="256" y="256"/></Size>
@@ -98,11 +96,10 @@
     </Layer>
 
   </Layers>
+
 </Button>
-
-
   <!-- Main Spell Choice Frame -->
-  <Frame name="SpellChoiceFrame" parent="UIParent" hidden="true" movable="true" frameStrata="FULLSCREEN_DIALOG">
+<Frame name="SpellChoiceFrame" parent="UIParent" hidden="true" movable="true" frameStrata="FULLSCREEN_DIALOG" enableMouse="true">
     <Size><AbsDimension x="650" y="300"/></Size>
     <Anchors>
       <Anchor point="CENTER"/>
@@ -114,7 +111,7 @@
 
     <Layers>
       <Layer level="ARTWORK">
-        <FontString name="SpellChoiceTitle" inherits="GameFontNormalLarge" text="Choose a Spell">
+        <FontString name="SpellChoiceTitle" inherits="GameFontNormalLarge">
           <Anchors>
             <Anchor point="TOP" x="0" y="-20"/>
           </Anchors>
@@ -123,25 +120,25 @@
             <AbsDimension x="1" y="-1"/>
           </ShadowOffset>
           <ShadowColor r="0" g="0" b="0" a="1"/>
-        </FontString>a
+        </FontString>
       </Layer>
     </Layers>
 
     <!-- Spell Option Buttons -->
     <Frames>
-      <Button name="SpellChoiceButton1" inherits="SpellChoiceButtonTemplate">
+      <Button name="SpellChoiceButton1" inherits="SpellChoiceButtonTemplate" enableMouse="true">
         <Anchors>
           <Anchor point="CENTER" x="-210" y="0"/>
         </Anchors>
       </Button>
 
-      <Button name="SpellChoiceButton2" inherits="SpellChoiceButtonTemplate">
+      <Button name="SpellChoiceButton2" inherits="SpellChoiceButtonTemplate" enableMouse="true">
         <Anchors>
           <Anchor point="CENTER" x="0" y="0"/>
         </Anchors>
       </Button>
 
-      <Button name="SpellChoiceButton3" inherits="SpellChoiceButtonTemplate">
+      <Button name="SpellChoiceButton3" inherits="SpellChoiceButtonTemplate" enableMouse="true">
         <Anchors>
           <Anchor point="CENTER" x="210" y="0"/>
         </Anchors>

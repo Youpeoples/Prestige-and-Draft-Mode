@@ -1,7 +1,11 @@
 -- Create a hidden tooltip for reading spell descriptions
 local tooltip = CreateFrame("GameTooltip", "DummyTooltip", UIParent, "GameTooltipTemplate")
+local totalDrafts = 0
 tooltip:SetOwner(UIParent, "ANCHOR_NONE")
-
+GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+GameTooltip:SetFrameStrata("TOOLTIP")
+GameTooltip:SetFrameLevel(100)
+GameTooltip:SetClampedToScreen(true)
 -- Filter out SC:123 whispers from showing in chat
 local function SpellChoiceWhisperFilter(_, _, msg)
   if msg:match("^SC:%d+$") then return true end
@@ -12,6 +16,9 @@ ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", SpellChoiceWhisperFil
 
 local unlocked = false -- ← Controlled by server response
 local frame = SpellChoiceFrame
+SpellChoiceFrame:EnableMouse(true)
+SpellChoiceFrame:SetFrameStrata("TOOLTIP")
+GameTooltip:SetClampedToScreen(true)
 local buttons = {SpellChoiceButton1, SpellChoiceButton2, SpellChoiceButton3}
 
 -- Delay function for 3.3.5
@@ -50,6 +57,7 @@ end
 
 -- Show spell choices to the player
 local function ShowSpellChoices(spellIDs)
+  print("SpellChoiceTitle is", SpellChoiceTitle and "found" or "MISSING")
   if not unlocked then
     Debug("Blocked: Player is not prestiged.")
     return
@@ -78,6 +86,10 @@ local function ShowSpellChoices(spellIDs)
 
       if name and icon then
         Debug("Spell " .. i .. ": " .. name .. " (ID: " .. spellID .. ")")
+        -- Force spell to load into cache
+        local cacheTooltip = CreateFrame("GameTooltip", "CacheTooltip", UIParent, "GameTooltipTemplate")
+        cacheTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+        cacheTooltip:SetHyperlink("spell:" .. spellID)
         btn:SetID(spellID)
         btn.icon:SetTexture(icon)
         btn.name:SetText(name)
@@ -151,30 +163,42 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
 
     elseif prefix == "SpellChoiceClose" then
       frame:Hide()
+
     elseif prefix == "SpellChoiceRerollDenied" then
       UIErrorsFrame:AddMessage("You have no rerolls remaining.", 1, 0, 0, 1)
+
     elseif prefix == "SpellChoiceRerolls" then
       rerollsLeft = tonumber(message) or 0
       UpdateRerollButton()
+
+    elseif prefix == "SpellChoiceDrafts" then
+      Debug("Received SpellChoiceDrafts with message: " .. message)
+      local totalDrafts = tonumber(message) or 0
+      if SpellChoiceTitle then
+        SpellChoiceTitle:SetText("Draft a Spell. You have " .. totalDrafts .. " Drafts Remaining.")
+      end
     end
   end
 end)
 
 Debug("SpellChoice addon loaded.")
 
-for i, btn in ipairs(buttons) do
-  btn:SetScript("OnClick", function(self)
-    local selectedSpellID = self:GetID()
-    if selectedSpellID and selectedSpellID > 0 then
-      Debug("Selected spell ID: " .. selectedSpellID)
-      -- Send it to the server
-      SendChatMessage("SC:" .. selectedSpellID, "WHISPER", nil, UnitName("player"))
-      frame:Hide()
-    else
-      Debug("No valid spell ID selected.")
+for _, btn in ipairs(buttons) do
+  btn:SetScript("OnEnter", function(self)
+    local spellID = self:GetID()
+    if spellID and spellID > 0 then
+      GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+      GameTooltip:SetHyperlink("spell:" .. spellID)
+      GameTooltip:Show()
     end
   end)
+
+  btn:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+  end)
 end
+
+
 
 local rerollCooldown = false
 
