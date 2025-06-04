@@ -63,10 +63,10 @@ local function ShowSpellChoices(spellIDs)
     return
   end
 
-  if UnitLevel("player") == 1 then
-    Debug("Blocked: Player is level 1. Spell choices disabled.")
-    return
-  end
+  -- if UnitLevel("player") == 1 then
+  --   Debug("Blocked: Player is level 1. Spell choices disabled.")
+  --   return
+  -- end
 
   Debug("Showing spell choices...")
 
@@ -79,9 +79,9 @@ local function ShowSpellChoices(spellIDs)
 
       btn.icon        = _G[btn:GetName() .. "Icon"]
       btn.name        = _G[btn:GetName() .. "Name"]
-      btn.mana        = _G[btn:GetName() .. "Mana"]
-      btn.castTime    = _G[btn:GetName() .. "CastTime"]
-      btn.description = _G[btn:GetName() .. "Description"]
+      --btn.mana        = _G[btn:GetName() .. "Mana"]
+      --btn.castTime    = _G[btn:GetName() .. "CastTime"]
+      --btn.description = _G[btn:GetName() .. "Description"]
       btn.levelReq    = _G[btn:GetName() .. "LevelReq"]
 
       if name and icon then
@@ -105,8 +105,8 @@ local function ShowSpellChoices(spellIDs)
           end
         end
 
-        btn.description:SetText(table.concat(descriptionLines, "\n"))
-        btn.levelReq:SetText("Required level: 1")
+        --btn.description:SetText(table.concat(descriptionLines, "\n"))
+        --btn.levelReq:SetText("Required level: 1")
         btn:Show()
       else
         Debug("Missing data for spell ID: " .. tostring(spellID))
@@ -175,7 +175,7 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
       Debug("Received SpellChoiceDrafts with message: " .. message)
       local totalDrafts = tonumber(message) or 0
       if SpellChoiceTitle then
-        SpellChoiceTitle:SetText("Draft a Spell. You have " .. totalDrafts .. " Drafts Remaining.")
+        SpellChoiceTitle:SetText("" .. totalDrafts .. " Drafts Remaining")
       end
     end
   end
@@ -196,6 +196,14 @@ for _, btn in ipairs(buttons) do
   btn:SetScript("OnLeave", function(self)
     GameTooltip:Hide()
   end)
+btn:SetScript("OnClick", function(self)
+    local spellID = self:GetID()
+    if spellID and spellID > 0 then
+      SendChatMessage("SC:" .. spellID, "WHISPER", nil, UnitName("player"))
+    end
+  end)
+
+
 end
 
 

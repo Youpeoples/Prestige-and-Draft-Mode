@@ -79,7 +79,7 @@ local function LoadValidSpellChoices(player, maxLevel)
     -- Step 2: Query valid spells from DBC
     local query = WorldDBQuery([[
         SELECT s.Id, s.Effect_1, s.Effect_2, s.Effect_3,
-               s.Description_Lang_enUS, s.BaseLevel, s.MaxLevel, 
+               s.Description_Lang_enUS, s.SpellLevel, s.MaxLevel, 
                s.DurationIndex, s.Category, s.Name_Lang_enUS, s.SpellIconID
         FROM dbc_spells s
         JOIN dbc_skilllineability sla ON s.Id = sla.Spell

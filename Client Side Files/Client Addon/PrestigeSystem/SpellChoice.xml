@@ -23,7 +23,7 @@
     <Layer level="ARTWORK">
       <FontString name="$parentName" inherits="GameFontNormal" justifyH="CENTER">
         <Anchors>
-          <Anchor point="TOP" x="0" y="-36"/>
+          <Anchor point="TOP" x="0" y="-38"/>
         </Anchors>
       </FontString>
     </Layer>
@@ -31,39 +31,11 @@
     <!-- Icon -->
     <Layer level="ARTWORK">
       <Texture name="$parentIcon" file="Interface\\Icons\\INV_Misc_QuestionMark" setAllPoints="false">
-        <Size x="40" y="40"/>
+        <Size x="120" y="120"/>
         <Anchors>
-          <Anchor point="TOP" relativeTo="$parentName" relativePoint="BOTTOM" x="0" y="-20"/>
+          <Anchor point="TOP" relativeTo="$parentName" relativePoint="BOTTOM" x="0" y="-25"/>
         </Anchors>
       </Texture>
-    </Layer>
-
-    <!-- Description -->
-    <Layer level="OVERLAY">
-      <FontString name="$parentMana" inherits="GameFontHighlightSmall">
-        <Anchors>
-          <Anchor point="TOP" relativeTo="$parentIcon" relativePoint="BOTTOM" x="0" y="-4"/>
-        </Anchors>
-        <JustifyH>CENTER</JustifyH>
-      </FontString>
-
-      <FontString name="$parentCastTime" inherits="GameFontHighlightSmall">
-        <Anchors>
-          <Anchor point="TOP" relativeTo="$parentMana" relativePoint="BOTTOM" x="0" y="0"/>
-        </Anchors>
-        <JustifyH>CENTER</JustifyH>
-      </FontString>
-
-      <FontString name="$parentDescription" inherits="GameFontHighlightSmall">
-        <Size><AbsDimension x="146" y="80"/></Size>
-        <Anchors>
-          <Anchor point="TOP" relativeTo="$parentCastTime" relativePoint="BOTTOM" x="0" y="10"/>
-        </Anchors>
-        <JustifyH>CENTER</JustifyH>
-        <JustifyV>TOP</JustifyV>
-        <NonSpaceWrap>true</NonSpaceWrap>
-        <MaxLines>4</MaxLines>
-      </FontString>
     </Layer>
 
     <Layer level="OVERLAY">
