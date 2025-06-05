@@ -1,3 +1,4 @@
+local REROLLS_PER_LEVELUP = 2
 -- Tracks which players are actively “drafting” a spell (so we don’t block those)
 local draftingPlayers = {}
 
@@ -302,13 +303,20 @@ local function OnLevelUp(event, player, oldLevel)
     --     return
     -- end
 
-    -- Increment expected drafts
+    -- Increment expected drafts AND rerolls
     CharDBQuery(string.format([[
-        INSERT INTO prestige_stats (player_id, successful_drafts, total_expected_drafts, draft_state)
-        VALUES (%d, 0, 1, 1)
-        ON DUPLICATE KEY UPDATE total_expected_drafts = total_expected_drafts + 1;
-    ]], guid))
-
+        INSERT INTO prestige_stats (player_id, successful_drafts, total_expected_drafts, draft_state, rerolls)
+        VALUES (%d, 0, 1, 1, %d)
+        ON DUPLICATE KEY UPDATE
+            total_expected_drafts = total_expected_drafts + 1,
+            rerolls = rerolls + %d;
+    ]], guid, REROLLS_PER_LEVELUP, REROLLS_PER_LEVELUP))
+    -- Send updated rerolls to client
+    local rerollQ = CharDBQuery("SELECT rerolls FROM prestige_stats WHERE player_id = " .. guid)
+    if rerollQ then
+      local rerolls = rerollQ:GetUInt32(0)
+      player:SendAddonMessage("SpellChoiceRerolls", tostring(rerolls), 0, player)
+    end
     -- Check if player is due for a draft
     local check = CharDBQuery("SELECT successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
     if not check then return end
@@ -323,18 +331,30 @@ local function OnLevelUp(event, player, oldLevel)
     local remaining = math.max(0, expected - successful)
     player:SendAddonMessage("SpellChoiceDrafts", tostring(remaining), 0, player)
     -- Reset and reload valid spell choices
-    ValidSpellChoices = {}
-    LoadValidSpellChoices(player, player:GetLevel())
+    -- Check if player already has pending spells
+    local existing = LoadSpellsFromDB(guid)
+    if not existing or existing[1] == 0 then
+        -- No pending spells, generate new ones
+        ValidSpellChoices = {}
+        LoadValidSpellChoices(player, player:GetLevel())
 
-    -- Send 3 random spells
-    local spells = GetRandomSpells(3)
-    spellChoicesPerPlayer[guid] = spells
-    SaveSpellsToDB(guid, spells)
-    local data = table.concat(spells, ",")
+        local spells = GetRandomSpells(3)
+        spellChoicesPerPlayer[guid] = spells
+        SaveSpellsToDB(guid, spells)
 
-    print("[DEBUG] Selected spells for " .. player:GetName() .. ": " .. data)
-    player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
-    player:SendAddonMessage("SpellChoice", data, 0, player)
+        local data = table.concat(spells, ",")
+        print("[DEBUG] New spells for " .. player:GetName() .. ": " .. data)
+        player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
+        player:SendAddonMessage("SpellChoice", data, 0, player)
+    else
+        print("[DEBUG] Player already has pending draft. Resending existing spells.")
+
+        spellChoicesPerPlayer[guid] = existing
+        local data = table.concat(existing, ",")
+        player:SendBroadcastMessage("[DEBUG] Resending existing spell choices: " .. data)
+        player:SendAddonMessage("SpellChoice", data, 0, player)
+    end
+
 end
 
 

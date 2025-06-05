@@ -2,8 +2,9 @@ local NPC_ID = 2069426
 
 -- Configuration
 local MAX_LEVEL = 70
-local DRAFT_MODE_REROLLS = 15 
-local DRAFT_MODE_SPELLS = 3  --starting amount drafts allowed on character creation/prestige
+local DRAFT_MODE_REROLLS = 5 
+local DRAFT_MODE_SPELLS = 3  --starting amount drafts allowed on character creation.Going into drat mode 
+local DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL = 5;
 local prestigeDescription = [[
     In the vast weave of time, there are countless realities where your character made different choices.
 
@@ -516,6 +517,14 @@ local function ShowMainMenu(player, creature)
     player:GossipClearMenu()
     player:GossipMenuAddItem(2, "What is Prestige?", 1, 1)
     player:GossipMenuAddItem(4, "I would like to prestige!", 1, 2)
+
+    -- ONLY show if player is currently in draft mode
+    local guid = player:GetGUIDLow()
+    local result = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
+    if result and result:GetUInt32(0) == 1 then
+        player:GossipMenuAddItem(4, RED .. "I wish to end my drafting experience.", 1, 200)
+    end
+
     player:GossipMenuAddItem(0, "Goodbye", 1, 999)
     player:GossipSendMenu(1, creature)
 end
@@ -554,6 +563,14 @@ local function ShowDraftConfirmation(player, creature)
     player:GossipMenuAddItem(0, "", 1, 998) -- Spacer
     player:GossipMenuAddItem(9, RED .. "I am sure I want to Prestige into Draft Mode!", 1, 101)
     player:GossipMenuAddItem(0, "Back", 1, 2)
+    player:GossipSendMenu(1, creature)
+end
+local function ShowEndDraftConfirmation(player, creature)
+    player:GossipClearMenu()
+    player:GossipMenuAddItem(0, "|TInterface\\Icons\\INV_Misc_QuestionMark:20|t This will reset your character as if you prestiged, but without increasing your prestige level.", 1, 998)
+    player:GossipMenuAddItem(0, "", 1, 998) -- Spacer
+    player:GossipMenuAddItem(9, RED .. "I am sure I want to end Drafting.", 1, 201)
+    player:GossipMenuAddItem(0, "Back", 1, 0)
     player:GossipSendMenu(1, creature)
 end
 -- Gossip handler
@@ -652,17 +669,38 @@ local function DoPrestige(player, draftMode)
         player:SendBroadcastMessage("Draft Mode: Enabled for next run.")
         print("[DraftMode] Draft mode enabled for player: " .. player:GetName() .. " (" .. guid .. ")")
 
+        -- Recalculate current prestige level after increment (safe fallback)
+        local prestigeLevel = 1
+        local q = CharDBQuery("SELECT prestige_level FROM prestige_stats WHERE player_id = " .. guid)
+        if q then
+            prestigeLevel = q:GetUInt32(0)
+        end
+
+        local bonusRerolls = DRAFT_MODE_REROLLS + (DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL * (prestigeLevel))
+
+        -- Determine original class safely
+        local storedClass = player:GetClass()
+        local storedQuery = CharDBQuery("SELECT stored_class FROM prestige_stats WHERE player_id = " .. guid)
+        if storedQuery and storedQuery:GetUInt8(0) > 0 then
+            storedClass = storedQuery:GetUInt8(0)  -- Keep existing non-zero value
+        end
+
         local updateStatsQuery = string.format([[
             UPDATE prestige_stats
             SET draft_state = 1,
                 successful_drafts = 0,
                 total_expected_drafts = %d,
-                rerolls = %d
+                rerolls = %d,
+                stored_class = %d,
+                offered_spell_1 = 0,
+                offered_spell_2 = 0,
+                offered_spell_3 = 0
             WHERE player_id = %d
-        ]], DRAFT_MODE_SPELLS, DRAFT_MODE_REROLLS, guid)
+        ]], DRAFT_MODE_SPELLS, bonusRerolls, storedClass, guid)
+
         CharDBExecute(updateStatsQuery)
-        print("[DraftMode] Updated prestige_stats for " .. guid)
-        player:SendBroadcastMessage("prestige_stats updated")
+        print("[DraftMode] Updated prestige_stats for " .. guid .. " with " .. bonusRerolls .. " rerolls")
+        player:SendBroadcastMessage("Draft rerolls granted: " .. bonusRerolls)
     end
     RemoveAndMailEquippedItems(player)
     player:SetLevel(player:GetClass() == 6 and 55 or 1)
@@ -748,6 +786,86 @@ local function DoPrestige(player, draftMode)
         end
     end, 500, 1)
 end
+local function DoDraftEnd(player)
+    local guid = player:GetGUIDLow()
+
+    -- Fetch stored class
+    local q = CharDBQuery("SELECT stored_class FROM prestige_stats WHERE player_id = " .. guid)
+    if not q then
+        player:SendBroadcastMessage("Could not end Draft Mode: missing stored_class.")
+        return
+    end
+
+    local originalClass = q:GetUInt8(0)
+    if not originalClass or originalClass == 0 then
+        player:SendBroadcastMessage("Stored class is invalid.")
+        return
+    end
+
+    -- Reset draft state
+    CharDBExecute("UPDATE prestige_stats SET draft_state = 0 WHERE player_id = " .. guid)
+
+    RemoveAndMailEquippedItems(player)
+    player:SetLevel(originalClass == 6 and 55 or 1)
+    GiveStartingGear(player)
+
+    player:SendBroadcastMessage("|cffff0000You have exited Draft Mode.|r Your class will be restored.")
+    player:SendBroadcastMessage("You will be kicked to finalize your class change.")
+    player:GossipComplete()
+    local draftedSpellsQuery = CharDBQuery("SELECT spell_id FROM drafted_spells WHERE player_guid = " .. guid)
+    if draftedSpellsQuery then
+        repeat
+            local spellId = draftedSpellsQuery:GetUInt32(0)
+            if player:HasSpell(spellId) then
+                player:RemoveSpell(spellId)
+            end
+        until not draftedSpellsQuery:NextRow()
+    end
+    -- Clean up data
+    CharDBExecute("DELETE FROM character_action WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM character_spell WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM drafted_spells WHERE player_guid = " .. guid)
+    CharDBExecute("DELETE FROM character_queststatus WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM character_queststatus_rewarded WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM character_queststatus_daily WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM character_queststatus_weekly WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM character_queststatus_seasonal WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM character_queststatus_monthly WHERE guid = " .. guid)
+
+    -- Teleport, then logout and restore original class
+    CreateLuaEvent(function()
+        local plr = GetPlayerByGUID(guid)
+        if not plr then return end
+
+        local raceStartLocations = {
+            [1]  = {map = 0,   x = -8949.95,  y = -132.493, z = 83.5312,   o = 3.142},
+            [2]  = {map = 1,   x = -618.518,  y = -4251.67, z = 38.718,    o = 6.2},
+            [3]  = {map = 0,   x = -6240.32,  y = 331.033,  z = 382.757,   o = 5.2},
+            [4]  = {map = 1,   x = 10311.3,   y = 832.463,  z = 1326.41,   o = 5.7},
+            [5]  = {map = 0,   x = 1676.35,   y = 1678.68,  z = 121.67,    o = 1.6},
+            [6]  = {map = 1,   x = -2917.58,  y = -257.98,  z = 52.9968,   o = 0.0},
+            [7]  = {map = 0,   x = -6240.95,  y = 331.493,  z = 382.5312,  o = 5.2},
+            [8]  = {map = 1,   x = -618.518,  y = -4251.67, z = 38.718,    o = 6.2},
+            [10] = {map = 530, x = 10349.6,   y = -6357.29, z = 33.4026,   o = 5.3},
+            [11] = {map = 530, x = -3961.64,  y = -13931.2, z = 100.615,   o = 2.08},
+        }
+
+        local dkStart = {map = 609, x = 2352.47, y = -5665.831, z = 426.02786, o = 1.44}
+        local loc = (plr:GetClass() == 6) and dkStart or raceStartLocations[plr:GetRace()]
+        if loc then
+            plr:Teleport(loc.map, loc.x, loc.y, loc.z, loc.o)
+        end
+
+        -- Schedule logout + class restore
+        local guidLow = plr:GetGUIDLow()
+        plr:KickPlayer()
+
+        CreateLuaEvent(function()
+            CharDBExecute("UPDATE characters SET class = " .. originalClass .. " WHERE guid = " .. guidLow)
+            print("[DraftMode] Restored class to " .. originalClass .. " for player " .. guidLow)
+        end, 1000, 1)
+    end, 500, 1)
+end
 
 local function OnGossipSelect(event, player, creature, sender, intid)
     local guid = player:GetGUIDLow()
@@ -770,6 +888,10 @@ local function OnGossipSelect(event, player, creature, sender, intid)
         DoPrestige(player, false) -- normal prestige
     elseif intid == 101 then
         DoPrestige(player, true)  -- draft mode prestige
+    elseif intid == 200 then
+        ShowEndDraftConfirmation(player, creature) 
+    elseif intid == 201 then
+        DoDraftEnd(player) 
     end
 end
 

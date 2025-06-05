@@ -78,7 +78,8 @@ local function EnsurePrestigeEntry(_, player)
             end
         end, 3000, 1)
     else
-        CharDBExecute("INSERT INTO prestige_stats (player_id, prestige_level, draft_state) VALUES (" .. guid .. ", 0, 0)")
+        local class = player:GetClass()
+        CharDBExecute("INSERT INTO prestige_stats (player_id, prestige_level, draft_state, stored_class) VALUES (" .. guid .. ", 0, 0, " .. class .. ")")
     end
 end
 
