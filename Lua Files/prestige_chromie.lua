@@ -2,15 +2,26 @@ local NPC_ID = 2069426
 
 -- Configuration
 local MAX_LEVEL = 70
-local DRAFT_MODE_REROLLS = 99 
+local DRAFT_MODE_REROLLS = 15 
 local DRAFT_MODE_SPELLS = 3  --starting amount drafts allowed on character creation/prestige
-local prestigeDescription = "Potato\nPotato\nPotato\nPotato\nPotato"
-local prestigeBlockedMessage = "French\nFrench\nFrench\nFrench\nFrench"
+local prestigeDescription = [[
+    In the vast weave of time, there are countless realities where your character made different choices.
+
+    Perhaps a Troll warrior learned the secrets of the Light, or a Tauren mage studied the mysteries of the arcane.
+
+    The Prestige System lets you tap into these echoes of alternate timelines, drawing from destinies you never walked.. but could have.
+
+    The Bronze Dragonflight has safeguarded these echoes, and now, with the timelines becoming increasingly unstable, we’ve made these echoes accessible.. with a cost, of course.
+
+    To Prestige is to reset your journey through time, returning to your youth while retaining special memories in the form of unique spells, chosen from other realities.
+    ]]
+
+local prestigeBlockedMessage = "You are not yet at max level.\nYou cannot partake in prestigeous events."
 local prestigeLossList = {
     "- Earned Levels",
     "- Learned Spells",
     "- Quest History",
-    "- Talent Points",
+    "- Talents and Talent Points",
     "- Equipped Gear(Returned via Mail)"
 }
 LOGOUT_TIMER = 10 -- time in seconds to wait after sending back to start before logging out to finish process.
@@ -22,7 +33,7 @@ local MAIL_BODY = "Your equipped gear has been returned to you after prestiging.
 local RED = "|cffff0000"
 local YELLOW = "|cffffff00"
 local WHITE = "|cffffffff"
-
+local draftAddonReady = {} 
 local startingGear = {
   -- ALLIANCE
   ["HUMAN_WARRIOR"] = {
@@ -345,9 +356,46 @@ local startingGear = {
     [11] = 34658, -- Plague Band (Ring 1)
     [12] = 38147, -- Corrupted Band (Ring 2)
     [1]  = 34652  -- Acherus Knight's Hood (Head)
-  }
+  },
+  ["ORC_MAGE"] = {
+    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
+    [5]  = 56,      -- Apprentice's Robes (Chest)
+    [7]  = 1395,    -- Apprentice's Pants (Legs)
+    [8]  = 20895    -- Apprentice's Boots (Feet)
+  },
+  ["TROLL_MAGE"] = {
+    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
+    [5]  = 56,      -- Apprentice's Robes (Chest)
+    [7]  = 1395,    -- Apprentice's Pants (Legs)
+    [8]  = 20895    -- Apprentice's Boots (Feet)
+  },
+  ["DWARF_MAGE"] = {
+    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
+    [5]  = 56,      -- Apprentice's Robes (Chest)
+    [7]  = 1395,    -- Apprentice's Pants (Legs)
+    [8]  = 20895    -- Apprentice's Boots (Feet)
+  },
+  ["TAUREN_MAGE"] = {
+    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
+    [5]  = 56,      -- Apprentice's Robes (Chest)
+    [7]  = 1395,    -- Apprentice's Pants (Legs)
+    [8]  = 20895    -- Apprentice's Boots (Feet)
+  },
+  ["NIGHTELF_MAGE"] = {
+    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
+    [5]  = 56,      -- Apprentice's Robes (Chest)
+    [7]  = 1395,    -- Apprentice's Pants (Legs)
+    [8]  = 20895    -- Apprentice's Boots (Feet)
+  },
 }
 
+local function OnDraftAddonWhisper(event, player, msg, msgType, lang, receiver)
+    if msg == "DRAFT_READY" and receiver == player:GetName() then
+        draftAddonReady[player:GetGUIDLow()] = true
+        print("[DraftMode] Addon detected from " .. player:GetName())
+        return false
+    end
+end
 
 local function GiveStartingGear(player)
     local race = player:GetRace()
@@ -681,12 +729,13 @@ local function DoPrestige(player, draftMode)
             plr:SendBroadcastMessage("Unknown race/class start location.")
         end
 
-        -- Always schedule delayed logout
-        CreateLuaEvent(function()
-            local p = GetPlayerByGUID(guid)
-            if p then p:LogoutPlayer(true) end
-        end, LOGOUT_AFTER_PRESTIGE_TIMER, 1)
-
+        -- Always schedule delayed logout if not drafting
+        if not draftMode then
+            CreateLuaEvent(function()
+                local p = GetPlayerByGUID(guid)
+                if p then p:LogoutPlayer(true) end
+            end, LOGOUT_AFTER_PRESTIGE_TIMER, 1)
+        end
         -- If draftMode, immediately kick and schedule class change
         if draftMode then
             local guidLow = plr:GetGUIDLow()  -- Cache the GUID before logout
@@ -726,3 +775,4 @@ end
 
 RegisterCreatureGossipEvent(NPC_ID, 1, OnGossipHello)
 RegisterCreatureGossipEvent(NPC_ID, 2, OnGossipSelect)
+RegisterPlayerEvent(19, OnDraftAddonWhisper)

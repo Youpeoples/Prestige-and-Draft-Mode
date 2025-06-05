@@ -8,53 +8,38 @@ local justBlockedSpells = {}
 local spellChoicesPerPlayer = {}
 
 local spellChoices = {}
-
--- List of keyword fragments to filter out junk spells
-local garbageKeywords = {
-    -- "test", "dummy", "deprecated", "old", "unused",
-    -- "birmingham", "do not use", "internal", "debug",
-    -- "dev", "qa", "template", "copy", "mirror", "null", "cosmetic", "zoomtemp",
-    -- "temp", "transmute", "elixir", "food", "fed", "tower", "scorpid poison", "recombobulate",
-    -- "weak frostbolt", "first aid", "[PH]", "Coating", "Fronds", "Quel'Danas", "ashcrombe's","darkshore frenzy",
-    -- "blunt weapon", "boar", "mana oil", "bomb", "copper", "void shatter", "polly", "rhino charge", "wizard oil",
-    -- "venomhide poison", "sharpen weapon", "ph", "ninja", "sharpen blade", "Dan's", "Steam Tank", "tentacle call",
-    -- "raptor charge", "netherweave net", "fire shield effect", "miner's revenge", "rat nova", "oozeling", "healing aura",
-    -- "net", "raelorasz", "tetanus", "poison mushroom","mount", "summon", "ride", "steed", "charger", "sabre", "warhorse",
-    -- "cosmetic", "pet", "companion", "non-combat", "appearance", "aesthetic", "transform", "costume", "illusion", "gear", "carrying",
-    -- "flag", "enchant","only usable in", "requires you to be in", "only works in",
-    -- "only in ", "must be in", "only while in", "dalaran", "wintergrasp", "arena", "eastern plague", "battleground",
-    -- "nagrand", "warsong", "eye of the storm", "alterac", "arathi basin", "isle of conquest",
-    -- "strand of the ancients", "wintergrasp", "baradin", "tol barad", "crystal song","quest", "objective", 
-    -- "only usable while on", "while on", "escort", "complete the", "disguise", "signal", "quest item", "mark of",
-    -- "use item", "npc ally", "summon ally", "control npc", "quest credit", "little red", "throw snowball", "free", "torment",
-    -- "mystic essence", "soothe", "deafening siren", "recharging", "boulder assault", "goblin dragon gun", "emission",
-    -- "dnd", "sample", "patch", 
-}
-
 -- List of exact spell IDs to exclude
 local blacklistedSpellIds = {
 }
-local locationEffectTypes = {
-
-}
 local POOL_AMOUNT = 150
+
+local function LoadSpellsFromDB(guid)
+    local res = CharDBQuery("SELECT offered_spell_1, offered_spell_2, offered_spell_3 FROM prestige_stats WHERE player_id = " .. guid)
+    if res then
+        local spells = {
+            res:GetUInt32(0),
+            res:GetUInt32(1),
+            res:GetUInt32(2)
+        }
+        spellChoicesPerPlayer[guid] = spells
+        return spells
+    end
+    return nil
+end
+
+local function SaveSpellsToDB(guid, spells)
+    CharDBExecute(string.format([[
+        UPDATE prestige_stats
+        SET offered_spell_1 = %d, offered_spell_2 = %d, offered_spell_3 = %d
+        WHERE player_id = %d
+    ]], spells[1], spells[2], spells[3], guid))
+end
+
 local function isLocationEffect(spell)
     return locationEffectTypes[spell.effect1]
         or locationEffectTypes[spell.effect2]
         or locationEffectTypes[spell.effect3]
 end
-
--- Utility: check if name or desc contains garbage keywords
-local function containsGarbageKeyword(text)
-    local lowerText = string.lower(text)
-    for _, word in ipairs(garbageKeywords) do
-        if lowerText:find(word, 1, true) then
-            return true
-        end
-    end
-    return false
-end
-
 -- Utility: check if spell ID is blacklisted
 local function isBlacklistedSpellId(spellId)
     return blacklistedSpellIds[spellId] == true
@@ -78,16 +63,17 @@ local function LoadValidSpellChoices(player, maxLevel)
 
     -- Step 2: Query valid spells from DBC
     local query = WorldDBQuery([[
-        SELECT s.Id, s.Effect_1, s.Effect_2, s.Effect_3,
+    SELECT s.Id, s.Effect_1, s.Effect_2, s.Effect_3,
                s.Description_Lang_enUS, s.SpellLevel, s.MaxLevel, 
                s.DurationIndex, s.Category, s.Name_Lang_enUS, s.SpellIconID
-        FROM dbc_spells s
-        JOIN dbc_skilllineability sla ON s.Id = sla.Spell
-        JOIN dbc_skillline sl ON sla.SkillLine = sl.ID
-          AND sl.CategoryID IN (6, 7, 8, 9, 11)
-        LEFT JOIN spell_ranks sr ON s.Id = sr.spell_id
-        WHERE (sr.first_spell_id IS NULL OR sr.first_spell_id = s.Id)
-          AND s.SpellLevel <= ]] .. maxLevel .. [[
+          FROM dbc_spells s
+          JOIN dbc_skilllineability sla ON s.Id = sla.Spell
+          JOIN dbc_skillline sl ON sla.SkillLine = sl.ID
+            AND sl.CategoryID IN (6, 7, 8, 9, 11)
+         WHERE s.SpellLevel <= ]] .. maxLevel .. [[
+           AND s.Id NOT IN (
+               SELECT spell_id FROM spell_ranks WHERE spell_id != first_spell_id
+           )
     ]])
     if not query then
         print("[SpellChoice] No valid spells found in WorldDB.")
@@ -134,18 +120,6 @@ local function LoadValidSpellChoices(player, maxLevel)
 
         if isBlacklistedSpellId(spell.spellId) then
             table.insert(rejectedReasons, "Blacklisted ID")
-        end
-
-        if containsGarbageKeyword(spell.name) then
-            table.insert(rejectedReasons, "Garbage in name")
-        end
-
-        if containsGarbageKeyword(spell.desc) then
-            table.insert(rejectedReasons, "Garbage in desc")
-        end
-
-        if isLocationEffect(spell) then
-            table.insert(rejectedReasons, "Location effect")
         end
 
         if spell.desc == '' then
@@ -230,18 +204,17 @@ local function OnLearnSpell(event, player, spellId)
 
         print("[SpellBlock] Scheduled removal of spell " .. spellId .. " for " .. player:GetName())
     end
+
 end
 
 local function UpgradeKnownSpells(player)
     local level = player:GetLevel()
     local upgraded = 0
 
-    -- We'll only teach one “best” rank for each spell chain
     local visitedRoot = {}
     local knownSpells = player:GetSpells()  -- Returns an array of { spellId, … }
 
     for _, spellId in ipairs(knownSpells) do
-        -- 1) Find the “root” of this rank chain
         local rootQ = WorldDBQuery(
             "SELECT first_spell_id FROM spell_ranks WHERE spell_id = " .. spellId .. " LIMIT 1"
         )
@@ -250,7 +223,6 @@ local function UpgradeKnownSpells(player)
         if not visitedRoot[firstSpellId] then
             visitedRoot[firstSpellId] = true
 
-            -- 2) Query all ranks sorted by SpellLevel
             local rankQuery = WorldDBQuery([[
                 SELECT sr.spell_id, ds.SpellLevel
                   FROM spell_ranks sr
@@ -260,51 +232,37 @@ local function UpgradeKnownSpells(player)
             ]])
 
             if rankQuery then
-                local bestId, bestLvl = nil, -1
-
                 repeat
                     local candidateId = rankQuery:GetUInt32(0)
-                    local lvlQ = WorldDBQuery(
-                        "SELECT SpellLevel FROM dbc_spells WHERE Id = " .. candidateId .. " LIMIT 1"
-                    )
-                    local candidateLvl = (lvlQ and lvlQ:GetUInt32(0)) or 0
+                    local candidateLvl = rankQuery:GetUInt32(1)
 
-                    -- Keep track of the highest‐level rank that is ≤ player level
-                    if candidateLvl <= level and candidateLvl > bestLvl then
-                        bestId  = candidateId
-                        bestLvl = candidateLvl
+                    if candidateLvl <= level and not player:HasSpell(candidateId) then
+                        local guid = player:GetGUIDLow()
+
+                        if not (justBlockedSpells[guid] and justBlockedSpells[guid][candidateId]) then
+                            CharDBExecute(
+                                "INSERT IGNORE INTO drafted_spells (player_guid, spell_id) VALUES (" .. guid .. ", " .. candidateId .. ")"
+                            )
+
+                            draftingPlayers[guid] = true
+                            player:LearnSpell(candidateId)
+                            draftingPlayers[guid] = nil
+
+                            upgraded = upgraded + 1
+                        else
+                            justBlockedSpells[guid][candidateId] = nil
+                        end
                     end
                 until not rankQuery:NextRow()
-
-                -- 3) If bestId is found and player doesn’t already know it, teach it—unless it was just blocked
-                if bestId and not player:HasSpell(bestId) then
-                    local guid = player:GetGUIDLow()
-
-                    -- a) If this exact rank was just blocked, skip it now:
-                    if justBlockedSpells[guid] and justBlockedSpells[guid][bestId] then
-                        -- Clear that “just blocked” flag once and do NOT re-teach
-                        justBlockedSpells[guid][bestId] = nil
-                    else
-                        -- b) Teach that single best rank
-                        CharDBExecute(
-                            "INSERT IGNORE INTO drafted_spells (player_guid, spell_id) VALUES (" .. guid .. ", " .. bestId .. ")"
-                        )
-
-                        draftingPlayers[guid] = true
-                        player:LearnSpell(bestId)
-                        draftingPlayers[guid] = nil
-
-                        upgraded = upgraded + 1
-                    end
-                end
             end
         end
     end
 
     if upgraded > 0 then
         print("[SpellChoice] Taught " .. upgraded .. " spells to " .. player:GetName())
-    end
+    end  
 end
+
 
 
 -- Utility: shuffle and select N random spells
@@ -340,9 +298,9 @@ local function OnLevelUp(event, player, oldLevel)
     end
 
     -- Prevent spell choice at level 1
-    if player:GetLevel() == 1 then
-        return
-    end
+    -- if player:GetLevel() == 1 then
+    --     return
+    -- end
 
     -- Increment expected drafts
     CharDBQuery(string.format([[
@@ -362,7 +320,8 @@ local function OnLevelUp(event, player, oldLevel)
         print("[DEBUG] Player has no pending draft: " .. player:GetName())
         return
     end
-
+    local remaining = math.max(0, expected - successful)
+    player:SendAddonMessage("SpellChoiceDrafts", tostring(remaining), 0, player)
     -- Reset and reload valid spell choices
     ValidSpellChoices = {}
     LoadValidSpellChoices(player, player:GetLevel())
@@ -370,6 +329,7 @@ local function OnLevelUp(event, player, oldLevel)
     -- Send 3 random spells
     local spells = GetRandomSpells(3)
     spellChoicesPerPlayer[guid] = spells
+    SaveSpellsToDB(guid, spells)
     local data = table.concat(spells, ",")
 
     print("[DEBUG] Selected spells for " .. player:GetName() .. ": " .. data)
@@ -413,6 +373,13 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
     -- Handle SC_REROLL
     if msg == "SC_REROLL" then
         local result = CharDBQuery("SELECT draft_state, rerolls FROM prestige_stats WHERE player_id = " .. guid)
+        local updatedQ = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. guid)
+        if updatedQ then
+            local totalExpected = updatedQ:GetUInt32(0)
+            local successful = updatedQ:GetUInt32(1)
+            local remaining = math.max(0, totalExpected - successful)
+            player:SendAddonMessage("SpellChoiceDrafts", tostring(remaining), 0, player)
+        end
         if not result or result:GetUInt32(0) < 1 then
             player:SendBroadcastMessage("You are not prestiged.")
             return false
@@ -429,6 +396,7 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
 
         local spells = GetRandomSpells(3)
         spellChoicesPerPlayer[guid] = spells
+        SaveSpellsToDB(guid, spells)
         local data = table.concat(spells, ",")
         print("[SpellChoice] Rerolled spell choices for " .. player:GetName() .. ": " .. data)
         player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
@@ -451,10 +419,10 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         return false
     end
 
-    if level == 1 then
-        player:SendBroadcastMessage("You cannot select a spell at level 1.")
-        return false
-    end
+    -- if level == 1 then
+    --     player:SendBroadcastMessage("You cannot select a spell at level 1.")
+    --     return false
+    -- end
 
     if player:HasSpell(spellId) then
         player:SendBroadcastMessage("You already know that spell. Rerolling...")
@@ -475,17 +443,35 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
 
     -- Increment successful drafts
     CharDBExecute("UPDATE prestige_stats SET successful_drafts = successful_drafts + 1 WHERE player_id = " .. guid)
-
+    local updatedQ = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. guid)
+    if updatedQ then
+        local totalExpected = updatedQ:GetUInt32(0)
+        local successful = updatedQ:GetUInt32(1)
+        local remaining = math.max(0, totalExpected - successful)
+        player:SendAddonMessage("SpellChoiceDrafts", tostring(remaining), 0, player)
+    end
     draftingPlayers[guid] = true
     player:LearnSpell(spellId)
     draftingPlayers[guid] = nil
-
+    CharDBExecute(string.format([[
+        UPDATE prestige_stats
+        SET offered_spell_1 = 0, offered_spell_2 = 0, offered_spell_3 = 0
+        WHERE player_id = %d
+    ]], guid))
     CharDBExecute("INSERT IGNORE INTO drafted_spells (player_guid, spell_id) VALUES (" .. guid .. ", " .. spellId .. ")")
     UpgradeKnownSpells(player)
 
     spellChoicesPerPlayer[guid] = nil
     player:SendAddonMessage("SpellChoiceClose", "", 0, player)
+    -- Fresh query and send updated draft count again
+    local check = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. guid)
+    if check then
+        local totalExpected = check:GetUInt32(0)
+        local successful = check:GetUInt32(1)
+        local remaining = math.max(0, totalExpected - successful)
+        player:SendAddonMessage("SpellChoiceDrafts", tostring(remaining), 0, player)
 
+    end
     -- Check for additional pending drafts
     local check = CharDBQuery("SELECT successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
     if check then
@@ -495,6 +481,7 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         if successful < expected then
             local spells = GetRandomSpells(3)
             spellChoicesPerPlayer[guid] = spells
+            SaveSpellsToDB(guid, spells) 
             local data = table.concat(spells, ",")
             print("[SpellChoice] Follow-up draft for " .. player:GetName() .. ": " .. data)
             player:SendBroadcastMessage("[DEBUG] Sending follow-up spell choices: " .. data)
@@ -526,8 +513,14 @@ local function BeginDraftLoop(player, guid, rerolls, successful, expected)
     player:SendAddonMessage("SpellChoiceRerolls", tostring(rerolls), 0, player)
 
     -- First spell roll
-    local spells = GetRandomSpells(3)
+    -- Load from DB or generate if missing
+    local spells = LoadSpellsFromDB(guid)
+    if not spells or spells[1] == 0 then
+        spells = GetRandomSpells(3)
+        SaveSpellsToDB(guid, spells)
+    end
     spellChoicesPerPlayer[guid] = spells
+    SaveSpellsToDB(guid, spells) 
     local data = table.concat(spells, ",")
     print("[DEBUG] (Login) Pending draft for " .. player:GetName() .. ": " .. data)
     player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
@@ -551,7 +544,7 @@ local function OnLogin(event, player)
         print("[DEBUG] totalDrafts remaining:", totalDrafts)
         player:SendAddonMessage("SpellChoiceDrafts", tostring(totalDrafts), 0, player)
     else
-        print("[ERROR] No matching row found in prestige_stats for player_id =", playerGuid)
+        print("This player is not setup for drafting", playerGuid)
     end
 
     local result = CharDBQuery("SELECT draft_state, rerolls, successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
@@ -633,8 +626,13 @@ local function OnZoneChanged(event, player, newZone, newArea)
 
             local spells = spellChoicesPerPlayer[guid]
             if not spells or #spells ~= 3 then
-                spells = GetRandomSpells(3)
+                spells = LoadSpellsFromDB(guid)
+                if not spells or spells[1] == 0 then
+                    spells = GetRandomSpells(3)
+                    SaveSpellsToDB(guid, spells)
+                end
                 spellChoicesPerPlayer[guid] = spells
+                SaveSpellsToDB(guid, spells)
             end
 
             local data = table.concat(spells, ",")
