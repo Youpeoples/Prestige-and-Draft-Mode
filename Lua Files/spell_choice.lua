@@ -1,4 +1,8 @@
-local REROLLS_PER_LEVELUP = 2
+dofile("lua_scripts/prestige_and_spell_choice_config.lua")
+local INCLUDE_RARITY_5 = CONFIG.INCLUDE_RARITY_5
+local REROLLS_PER_LEVELUP = CONFIG.REROLLS_PER_LEVELUP
+local POOL_AMOUNT = CONFIG.POOL_AMOUNT
+local RARITY_DISTRIBUTION = CONFIG.RARITY_DISTRIBUTION
 -- Tracks which players are actively “drafting” a spell (so we don’t block those)
 local draftingPlayers = {}
 
@@ -12,7 +16,6 @@ local spellChoices = {}
 -- List of exact spell IDs to exclude
 local blacklistedSpellIds = {
 }
-local POOL_AMOUNT = 150
 
 local function LoadSpellsFromDB(guid)
     local res = CharDBQuery("SELECT offered_spell_1, offered_spell_2, offered_spell_3 FROM prestige_stats WHERE player_id = " .. guid)
@@ -49,11 +52,9 @@ end
 -- Main loader function with randomization and filtering
 local function LoadValidSpellChoices(player, maxLevel)
     spellChoices = {}
-
-    -- Seed RNG for proper shuffling
     math.randomseed(os.time())
 
-    -- Step 1: Load all known spells for this player from acore_characters.character_spell
+    -- Step 1: Load known spells
     local knownSpellIds = {}
     local knownQuery = CharDBQuery("SELECT spell FROM character_spell WHERE guid = " .. player:GetGUIDLow())
     if knownQuery then
@@ -61,12 +62,20 @@ local function LoadValidSpellChoices(player, maxLevel)
             knownSpellIds[knownQuery:GetUInt32(0)] = true
         until not knownQuery:NextRow()
     end
-
-    -- Step 2: Query valid spells from DBC
+    -- Step 1b: Load drafted spells
+    local draftedSpellIds = {}
+    local draftedQuery = CharDBQuery("SELECT spell_id FROM drafted_spells WHERE player_guid = " .. player:GetGUIDLow())
+    if draftedQuery then
+        repeat
+            draftedSpellIds[draftedQuery:GetUInt32(0)] = true
+        until not draftedQuery:NextRow()
+    end
+    -- Step 2: Query spells from DBC
     local query = WorldDBQuery([[
-    SELECT s.Id, s.Effect_1, s.Effect_2, s.Effect_3,
-               s.Description_Lang_enUS, s.SpellLevel, s.MaxLevel, 
-               s.DurationIndex, s.Category, s.Name_Lang_enUS, s.SpellIconID
+        SELECT s.Id, s.Effect_1, s.Effect_2, s.Effect_3,
+               s.Description_Lang_enUS, s.SpellLevel, s.MaxLevel,
+               s.DurationIndex, s.Category, s.Name_Lang_enUS, s.SpellIconID,
+               s.Rarity
           FROM dbc_spells s
           JOIN dbc_skilllineability sla ON s.Id = sla.Spell
           JOIN dbc_skillline sl ON sla.SkillLine = sl.ID
@@ -76,80 +85,101 @@ local function LoadValidSpellChoices(player, maxLevel)
                SELECT spell_id FROM spell_ranks WHERE spell_id != first_spell_id
            )
     ]])
+
     if not query then
-        print("[SpellChoice] No valid spells found in WorldDB.")
+        print("[SpellChoice] No valid spells found.")
         return
     end
 
-    -- Step 3: Build full spell list
-    local allSpells = {}
+    -- Step 3: Filter & bucket by rarity
+    local categorized = { [0]={}, [1]={}, [2]={}, [3]={}, [4]={}, [5]={} }
+    local totalChecked, totalAccepted = 0, 0
 
     repeat
-        local spellId = query:GetUInt32(0)
+        totalChecked = totalChecked + 1
 
-        -- Skip if player already knows this spell
-        if not knownSpellIds[spellId] then
-            local spellData = {
-                spellId       = spellId,
-                effect1       = query:GetUInt32(1),
-                effect2       = query:GetUInt32(2),
-                effect3       = query:GetUInt32(3),
-                desc          = query:GetString(4),
-                baseLevel     = query:GetUInt32(5),
-                maxLevelSpell = query:GetUInt32(6),
-                durationIndex = query:GetUInt32(7),
-                category      = query:GetUInt32(8),
-                name          = query:GetString(9),
-                iconId        = query:GetUInt32(10)
-            }
-            table.insert(allSpells, spellData)
+        local spellId = query:GetUInt32(0)
+        if not knownSpellIds[spellId] and not draftedSpellIds[spellId] then
+            local rarity = query:GetUInt8(11)
+            if (rarity ~= 5 or INCLUDE_RARITY_5) and (rarity >= 0 and rarity <= 5) then
+                local spell = {
+                    spellId = spellId,
+                    effect1 = query:GetUInt32(1),
+                    effect2 = query:GetUInt32(2),
+                    effect3 = query:GetUInt32(3),
+                    desc    = query:GetString(4),
+                    name    = query:GetString(9),
+                    iconId  = query:GetUInt32(10)
+                }
+
+                if not isBlacklistedSpellId(spellId)
+                   and spell.desc ~= ''
+                   and spell.name ~= ''
+                   and spell.iconId > 1
+                then
+                    table.insert(categorized[rarity], spellId)
+                    totalAccepted = totalAccepted + 1
+                end
+            end
         end
     until not query:NextRow()
 
-    -- Shuffle using Fisher-Yates
-    for i = #allSpells, 2, -1 do
-        local j = math.random(i)
-        allSpells[i], allSpells[j] = allSpells[j], allSpells[i]
-    end
 
-    -- Step 4: Filter
-    local totalChecked = 0
-    local totalAccepted = 0
-    for _, spell in ipairs(allSpells) do
-        totalChecked = totalChecked + 1
-        local rejectedReasons = {}
-
-        if isBlacklistedSpellId(spell.spellId) then
-            table.insert(rejectedReasons, "Blacklisted ID")
+    -- Step 4: Shuffle buckets and pick N from each
+    for rarity = 0, 4 do
+        local bucket = categorized[rarity]
+        for i = #bucket, 2, -1 do
+            local j = math.random(i)
+            bucket[i], bucket[j] = bucket[j], bucket[i]
         end
-
-        if spell.desc == '' then
-            table.insert(rejectedReasons, "Empty desc")
-        end
-
-        if spell.name == '' then
-            table.insert(rejectedReasons, "Empty name")
-        end
-
-        if spell.iconId <= 1 then
-            table.insert(rejectedReasons, "Missing icon")
-        end
-
-        if #rejectedReasons == 0 then
-            table.insert(spellChoices, spell.spellId)
-            totalAccepted = totalAccepted + 1
-        else
-            print("[SpellChoice] Rejected Spell: " .. spell.spellId .. " - " .. (spell.name or "nil") ..
-                  " | Reason(s): " .. table.concat(rejectedReasons, ", "))
-        end
-
-        if totalAccepted >= POOL_AMOUNT then
-            break
+        local target = math.floor((RARITY_DISTRIBUTION[rarity] or 0) * POOL_AMOUNT)
+        local added = 0
+        for i = 1, #bucket do
+            local id = bucket[i]
+            if not knownSpellIds[id] then
+                table.insert(spellChoices, id)
+                added = added + 1
+                if added >= target then break end
+            end
         end
     end
 
-    print("[SpellChoice] Randomized check: scanned " .. totalChecked .. ", accepted " .. totalAccepted .. " for level " .. maxLevel)
+    -- Optionally add Broken (5) spells last if allowed
+    if INCLUDE_RARITY_5 then
+        local bucket = categorized[5]
+        for i = #bucket, 2, -1 do
+            local j = math.random(i)
+            bucket[i], bucket[j] = bucket[j], bucket[i]
+        end
+        for _, id in ipairs(bucket) do
+            if #spellChoices >= POOL_AMOUNT then break end
+            table.insert(spellChoices, id)
+        end
+    end
+
+    local draftedRarityCount = { [0]=0, [1]=0, [2]=0, [3]=0, [4]=0, [5]=0 }
+
+    for _, spellId in ipairs(spellChoices) do
+        local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. spellId)
+        local rarity = (q and not q:IsNull(0)) and q:GetUInt8(0) or 0
+        draftedRarityCount[rarity] = (draftedRarityCount[rarity] or 0) + 1
+    end
+
+    -- print(string.format(
+    --     "[SpellChoice] Built pool: %d scanned, %d accepted, %d selected. Rarities: C=%d, U=%d, R=%d, E=%d, L=%d, B=%d",
+    --     totalChecked,
+    --     totalAccepted,
+    --     #spellChoices,
+    --     draftedRarityCount[0],
+    --     draftedRarityCount[1],
+    --     draftedRarityCount[2],
+    --     draftedRarityCount[3],
+    --     draftedRarityCount[4],
+    --     draftedRarityCount[5]
+    -- ))
+
 end
+
 
 
 
@@ -260,7 +290,7 @@ local function UpgradeKnownSpells(player)
     end
 
     if upgraded > 0 then
-        print("[SpellChoice] Taught " .. upgraded .. " spells to " .. player:GetName())
+        --print("[SpellChoice] Taught " .. upgraded .. " spells to " .. player:GetName())
     end  
 end
 
@@ -288,7 +318,7 @@ local spellChoicesPerPlayer = {}
 
 -- Event: Player level-up
 local function OnLevelUp(event, player, oldLevel)
-    print("[DEBUG] Player leveled up: " .. player:GetName())
+    --print("[DEBUG] Player leveled up: " .. player:GetName())
 
     local guid = player:GetGUIDLow()
 
@@ -325,7 +355,7 @@ local function OnLevelUp(event, player, oldLevel)
     local expected = check:GetUInt32(1)
 
     if successful >= expected then
-        print("[DEBUG] Player has no pending draft: " .. player:GetName())
+        --print("[DEBUG] Player has no pending draft: " .. player:GetName())
         return
     end
     local remaining = math.max(0, expected - successful)
@@ -343,8 +373,8 @@ local function OnLevelUp(event, player, oldLevel)
         SaveSpellsToDB(guid, spells)
 
         local data = table.concat(spells, ",")
-        print("[DEBUG] New spells for " .. player:GetName() .. ": " .. data)
-        player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
+        --print("[DEBUG] New spells for " .. player:GetName() .. ": " .. data)
+        --player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
         local rarityParts = {}
         for _, id in ipairs(spells) do
@@ -353,11 +383,11 @@ local function OnLevelUp(event, player, oldLevel)
         end
         player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
     else
-        print("[DEBUG] Player already has pending draft. Resending existing spells.")
+        --print("[DEBUG] Player already has pending draft. Resending existing spells.")
 
         spellChoicesPerPlayer[guid] = existing
         local data = table.concat(existing, ",")
-        player:SendBroadcastMessage("[DEBUG] Resending existing spell choices: " .. data)
+        --player:SendBroadcastMessage("[DEBUG] Resending existing spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
         local rarityParts = {}
         for _, id in ipairs(existing) do
@@ -430,8 +460,8 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         spellChoicesPerPlayer[guid] = spells
         SaveSpellsToDB(guid, spells)
         local data = table.concat(spells, ",")
-        print("[SpellChoice] Rerolled spell choices for " .. player:GetName() .. ": " .. data)
-        player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
+        --print("[SpellChoice] Rerolled spell choices for " .. player:GetName() .. ": " .. data)
+        --player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
         local rerolls = result:GetUInt32(1) - 1
         player:SendAddonMessage("SpellChoiceRerolls", tostring(rerolls), 0, player)
@@ -468,7 +498,7 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         local spells = GetRandomSpells(3)
         spellChoicesPerPlayer[guid] = spells
         local data = table.concat(spells, ",")
-        print("[SpellChoice] Auto-reroll (duplicate spell) for " .. player:GetName() .. ": " .. data)
+        --print("[SpellChoice] Auto-reroll (duplicate spell) for " .. player:GetName() .. ": " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
         local rarityParts = {}
         for _, id in ipairs(spells) do
@@ -496,7 +526,25 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
     end
     draftingPlayers[guid] = true
     player:LearnSpell(spellId)
+    -- Additional spell groups
+    if spellId == 1515 then
+        local extraSpells = {883, 2641, 6991, 982, 136}
+        for _, sid in ipairs(extraSpells) do
+            player:LearnSpell(sid)
+        end
+    elseif spellId == 47241 then
+        local extraSpells = {50581, 59671, 54785, 50589}
+        for _, sid in ipairs(extraSpells) do
+            player:LearnSpell(sid)
+        end
+    end
     draftingPlayers[guid] = nil
+    for i = #spellChoices, 1, -1 do
+        if spellChoices[i] == spellId then
+            table.remove(spellChoices, i)
+            break
+        end
+    end
     CharDBExecute(string.format([[
         UPDATE prestige_stats
         SET offered_spell_1 = 0, offered_spell_2 = 0, offered_spell_3 = 0
@@ -523,12 +571,13 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         local expected = check:GetUInt32(1)
 
         if successful < expected then
+            LoadValidSpellChoices(player, player:GetLevel())
             local spells = GetRandomSpells(3)
             spellChoicesPerPlayer[guid] = spells
             SaveSpellsToDB(guid, spells) 
             local data = table.concat(spells, ",")
-            print("[SpellChoice] Follow-up draft for " .. player:GetName() .. ": " .. data)
-            player:SendBroadcastMessage("[DEBUG] Sending follow-up spell choices: " .. data)
+            --print("[SpellChoice] Follow-up draft for " .. player:GetName() .. ": " .. data)
+            --player:SendBroadcastMessage("[DEBUG] Sending follow-up spell choices: " .. data)
             player:SendAddonMessage("SpellChoice", data, 0, player)
             local rarityParts = {}
             for _, id in ipairs(spells) do
@@ -572,8 +621,8 @@ local function BeginDraftLoop(player, guid, rerolls, successful, expected)
     spellChoicesPerPlayer[guid] = spells
     SaveSpellsToDB(guid, spells) 
     local data = table.concat(spells, ",")
-    print("[DEBUG] (Login) Pending draft for " .. player:GetName() .. ": " .. data)
-    player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
+    --print("[DEBUG] (Login) Pending draft for " .. player:GetName() .. ": " .. data)
+    --player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
     player:SendAddonMessage("SpellChoice", data, 0, player)
     local rarityParts = {}
     for _, id in ipairs(spells) do
@@ -587,17 +636,17 @@ end
 local function OnLogin(event, player)
     local guid = player:GetGUIDLow()
         local playerGuid = player:GetGUIDLow()
-    print("[DEBUG] Player GUID:", playerGuid)
+    --print("[DEBUG] Player GUID:", playerGuid)
 
     local query = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. playerGuid)
     if query then
         local totalExpected = query:GetUInt32(0)
         local successful = query:GetUInt32(1)
-        print("[DEBUG] total_expected_drafts:", totalExpected)
-        print("[DEBUG] successful_drafts:", successful)
+        --print("[DEBUG] total_expected_drafts:", totalExpected)
+        --print("[DEBUG] successful_drafts:", successful)
         local totalDrafts = totalExpected - successful
         if totalDrafts < 0 then totalDrafts = 0 end
-        print("[DEBUG] totalDrafts remaining:", totalDrafts)
+        --print("[DEBUG] totalDrafts remaining:", totalDrafts)
         player:SendAddonMessage("SpellChoiceDrafts", tostring(totalDrafts), 0, player)
     else
         print("This player is not setup for drafting", playerGuid)
@@ -657,21 +706,22 @@ local lastZoneDraft = {}
 local function OnZoneChanged(event, player, newZone, newArea)
     local guid = player:GetGUIDLow()
 
-    local result = CharDBQuery("SELECT successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
+    local result = CharDBQuery("SELECT draft_state, successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
     if not result then return end
 
-    local successful = result:GetUInt32(0)
-    local expected = result:GetUInt32(1)
+    local draftState = result:GetUInt8(0)
+    if draftState ~= 1 then return end --not in draft mode, bail out
+
+    local successful = result:GetUInt32(1)
+    local expected = result:GetUInt32(2)
 
     if successful < expected then
-        -- Prevent spammy triggers
         local now = os.time()
         if lastZoneDraft[guid] and now - lastZoneDraft[guid] < 5 then
             return
         end
         lastZoneDraft[guid] = now
 
-        -- Delay zone-triggered draft
         CreateLuaEvent(function()
             local p = GetPlayerByGUID(guid)
             if not p or not p:IsInWorld() then return end
@@ -692,9 +742,10 @@ local function OnZoneChanged(event, player, newZone, newArea)
             end
 
             local data = table.concat(spells, ",")
-            print("[SpellChoice] Zone-triggered draft for " .. p:GetName() .. ": " .. data)
-            p:SendBroadcastMessage("[DEBUG] Sending zone-triggered spell choices: " .. data)
+            --print("[SpellChoice] Zone-triggered draft for " .. p:GetName() .. ": " .. data)
+            --p:SendBroadcastMessage("[DEBUG] Sending zone-triggered spell choices: " .. data)
             p:SendAddonMessage("SpellChoice", data, 0, p)
+
             local rarityParts = {}
             for _, id in ipairs(spells) do
                 local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
@@ -704,6 +755,7 @@ local function OnZoneChanged(event, player, newZone, newArea)
         end, 2000, 1)
     end
 end
+
 
 
 

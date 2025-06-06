@@ -63,7 +63,7 @@ local function RequestPrestigeStatus()
   local target = UnitName("player")
   if target then
     SendChatMessage("SC_CHECK", "WHISPER", nil, UnitName("player"))
-    Debug("Sent SC_CHECK to server")
+    --Debug("Sent SC_CHECK to server")
   else
     print("SpellChoice: Failed to send SC message — player name is nil.")
   end
@@ -71,9 +71,9 @@ end
 
 -- Show spell choices to the player
 local function ShowSpellChoices(spellIDs)
-  print("SpellChoiceTitle is", SpellChoiceTitle and "found" or "MISSING")
+  --print("SpellChoiceTitle is", SpellChoiceTitle and "found" or "MISSING")
   if not unlocked then
-    Debug("Blocked: Player is not prestiged.")
+    --Debug("Blocked: Player is not prestiged.")
     return
   end
 
@@ -82,7 +82,7 @@ local function ShowSpellChoices(spellIDs)
   --   return
   -- end
 
-  Debug("Showing spell choices...")
+  --Debug("Showing spell choices...")
 
   for i = 1, #buttons do
     local spellID = tonumber(spellIDs[i])
@@ -113,7 +113,9 @@ local function ShowSpellChoices(spellIDs)
           local rarityTex = rarityTextures[rarityIndex + 1]
           if rarityTex then
             rarityFrame:SetTexture("Interface\\AddOns\\PrestigeSystem\\Textures\\" .. rarityTex)
-            rarityFrame:Show()
+            if(rarityFrame) then
+              rarityFrame:Show()
+            end
           else
             rarityFrame:Hide()
           end
@@ -153,8 +155,9 @@ local function ShowSpellChoices(spellIDs)
       if btn then btn:Hide() end
     end
   end
-
-  frame:Show()
+  if(frame)then
+    frame:Show()
+  end
 end
 
 
@@ -203,7 +206,7 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
       UpdateRerollButton()
 
     elseif prefix == "SpellChoiceDrafts" then
-      print("CLIENT RECEIVED: SpellChoiceDrafts =", message)
+      --print("CLIENT RECEIVED: SpellChoiceDrafts =", message)
       Debug("Received SpellChoiceDrafts with message: " .. message)
       local totalDrafts = tonumber(message) or 0
       if SpellChoiceTitle then
@@ -227,7 +230,9 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
           local rarityTex = rarityTextures[rarity + 1]
           if rarityTex and rarityFrame then
             rarityFrame:SetTexture("Interface\\AddOns\\PrestigeSystem\\Textures\\" .. rarityTex)
-            rarityFrame:Show()
+            if(rarityFrame) then
+              rarityFrame:Show()
+            end
           elseif rarityFrame then
             rarityFrame:Hide()
           end
@@ -297,25 +302,44 @@ SpellChoiceRerollButton:SetScript("OnClick", function()
 end)
 
 local dismissToggled = false
-
 SpellChoiceDismissButton:SetScript("OnClick", function(self)
   dismissToggled = not dismissToggled
 
   if dismissToggled then
-    -- Hide all UI EXCEPT the dismiss button
     local label = SpellChoiceTitle:GetText() or ""
     local count = label:match("(%d+)") or "0"
-    self:SetText(count .. " Drafts Left")
+    self:SetText(count .. " Draft(s) Left")
 
-    -- Hide the main frame but keep button visible
     for _, btn in ipairs(buttons) do btn:Hide() end
     SpellChoiceTitle:Hide()
     SpellChoiceRerollButton:Hide()
+
+    SpellChoiceFrame:EnableMouse(false)
+    SpellChoiceFrame:SetAlpha(0.01)
+
+    -- Reparent to UIParent and anchor to center (or wherever you want)
+    self:SetParent(UIParent)
+    self:ClearAllPoints()
+    self:SetPoint("CENTER", UIParent, "CENTER", 0, -360)  -- <- position when dismissed
+    self:SetFrameStrata("FULLSCREEN_DIALOG")
+    self:EnableMouse(true)
+    self:Show()
+
   else
-    -- Restore everything
     self:SetText("Dismiss")
+
     for _, btn in ipairs(buttons) do btn:Show() end
     SpellChoiceTitle:Show()
     SpellChoiceRerollButton:Show()
+
+    SpellChoiceFrame:EnableMouse(true)
+    SpellChoiceFrame:SetAlpha(1)
+
+    -- Restore to original parent and layout
+    self:SetParent(SpellChoiceFrame)
+    self:ClearAllPoints()
+    self:SetPoint("BOTTOM", SpellChoiceTitle, "TOP", 0, -310)  -- original position
+    self:SetFrameStrata("FULLSCREEN_DIALOG")
   end
 end)
+

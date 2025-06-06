@@ -132,7 +132,7 @@
       <Button name="SpellChoiceDismissButton" inherits="UIPanelButtonTemplate" text="Dismiss">
         <Size><AbsDimension x="100" y="24"/></Size>
         <Anchors>
-          <Anchor point="BOTTOM" relativeTo="SpellChoiceTitle" relativePoint="TOP" x="0" y="-290"/>
+          <Anchor point="CENTER" relativeTo="SpellChoiceTitle" relativePoint="TOP" x="0" y="-290"/>
         </Anchors>
         <Scripts>
         </Scripts>

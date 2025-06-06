@@ -1,9 +1,7 @@
-local prestigeTitles = {
-    [1] = 523, [2] = 524, [3] = 525, [4] = 526,
-    [5] = 527, [6] = 528, [7] = 529, [8] = 530,
-    [9] = 531, [10] = 532, [11] = 537
-}
-
+dofile("lua_scripts/prestige_and_spell_choice_config.lua")
+-- Configurable Chromie location messages
+local CHROMIE_LOCATION_HORDE = CONFIG.CHROMIE_LOCATION_HORDE
+local CHROMIE_LOCATION_ALLIANCE = CONFIG.CHROMIE_LOCATION_ALLIANCE
 -- Check if the player is in draft state
 local function IsPlayerInDraft(player)
     local guid = player:GetGUIDLow()
@@ -49,12 +47,6 @@ end
 -- Give title for prestige level
 local function GivePrestigeTitle(guid, prestigeLevel)
     local player = GetPlayerByGUID(guid)
-    if player then
-        local titleId = prestigeTitles[prestigeLevel]
-        if titleId and not player:HasTitle(titleId) then
-            player:SetKnownTitle(titleId)
-        end
-    end
 end
 
 -- On login: ensure DB row, give title, maybe start ticker
@@ -65,7 +57,13 @@ local function EnsurePrestigeEntry(_, player)
     if query then
         local prestigeLevel = query:GetUInt32(0)
         local draftState = query:GetUInt32(1)
-
+        
+        if player then
+            local titleId = CONFIG.PrestigeTitles[prestigeLevel]
+            if titleId and not player:HasTitle(titleId) then
+                player:SetKnownTitle(titleId)
+            end
+        end
         CreateLuaEvent(function()
             local p = GetPlayerByGUID(guid)
             if not p then return end
@@ -108,10 +106,32 @@ local function OnPlayerLogout(_, player)
         RemoveEventById(draftTickerGUIDs[guid])
         draftTickerGUIDs[guid] = nil
     end
+    if spellChoicesPerPlayer then
+        spellChoicesPerPlayer[guid] = nil
+    end
+
+    if draftAddonReady then
+        draftAddonReady[guid] = nil
+    end
+
+    if justBlockedSpells then
+        justBlockedSpells[guid] = nil
+    end
+end
+
+local function OnLevelUp(event, player, oldLevel)
+    if player:GetLevel() == 70 then
+        local factionGroup = player:GetTeam()  -- 0 = Alliance, 1 = Horde
+        local locationMsg = (factionGroup == 1) and CHROMIE_LOCATION_HORDE or CHROMIE_LOCATION_ALLIANCE
+
+        local fullMessage = "|cffffcc00You have reached level 70!|r You can now access |cffff8800Prestige|r and |cff00ccffPrestige Draft Mode|r. " .. locationMsg
+        player:SendAreaTriggerMessage(fullMessage)
+    end
 end
 
 -- Register only valid events
 RegisterPlayerEvent(4, OnPlayerLogout)
+RegisterPlayerEvent(13, OnLevelUp)  -- 13 = PLAYER_EVENT_ON_LEVEL_CHANGE
 RegisterPlayerEvent(3, EnsurePrestigeEntry)   -- On login
 RegisterPlayerEvent(13, OnRebuildEvent)       -- On level change
 RegisterPlayerEvent(28, OnRebuildEvent)       -- On map change
@@ -120,3 +140,5 @@ RegisterPlayerEvent(36, OnRebuildEvent)       -- On resurrect
 RegisterPlayerEvent(5, OnRebuildEvent)        -- On spell cast (catches form/stealth)
 RegisterPlayerEvent(33, OnRebuildEvent)       -- On enter combat
 RegisterPlayerEvent(34, OnRebuildEvent)       -- On leave combat
+
+

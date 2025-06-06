@@ -1,30 +1,13 @@
-local NPC_ID = 2069426
+dofile("lua_scripts/prestige_and_spell_choice_config.lua")
+local NPC_ID = CONFIG.NPC_ID
+local MAX_LEVEL = CONFIG.MAX_LEVEL
+local DRAFT_MODE_REROLLS = CONFIG.DRAFT_MODE_REROLLS 
+local DRAFT_MODE_SPELLS = CONFIG.DRAFT_MODE_SPELLS
+local DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL = CONFIG.DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL
+local prestigeDescription = CONFIG.prestigeDescription
 
--- Configuration
-local MAX_LEVEL = 70
-local DRAFT_MODE_REROLLS = 5 
-local DRAFT_MODE_SPELLS = 3  --starting amount drafts allowed on character creation.Going into drat mode 
-local DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL = 5;
-local prestigeDescription = [[
-    In the vast weave of time, there are countless realities where your character made different choices.
-
-    Perhaps a Troll warrior learned the secrets of the Light, or a Tauren mage studied the mysteries of the arcane.
-
-    The Prestige System lets you tap into these echoes of alternate timelines, drawing from destinies you never walked.. but could have.
-
-    The Bronze Dragonflight has safeguarded these echoes, and now, with the timelines becoming increasingly unstable, we’ve made these echoes accessible.. with a cost, of course.
-
-    To Prestige is to reset your journey through time, returning to your youth while retaining special memories in the form of unique spells, chosen from other realities.
-    ]]
-
-local prestigeBlockedMessage = "You are not yet at max level.\nYou cannot partake in prestigeous events."
-local prestigeLossList = {
-    "- Earned Levels",
-    "- Learned Spells",
-    "- Quest History",
-    "- Talents and Talent Points",
-    "- Equipped Gear(Returned via Mail)"
-}
+local prestigeBlockedMessage = CONFIG.prestigeBlockedMessage
+local prestigeLossList = CONFIG.prestigeLossList
 LOGOUT_TIMER = 10 -- time in seconds to wait after sending back to start before logging out to finish process.
 LOGOUT_AFTER_PRESTIGE_TIMER = LOGOUT_TIMER * 1000
 local EQUIP_SLOT_START = 0
@@ -726,12 +709,12 @@ local function DoPrestige(player, draftMode)
     CharDBExecute("DELETE FROM character_action WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_spell WHERE guid = " .. guid)
     local result = CharDBQuery("SELECT spell_id FROM drafted_spells WHERE player_guid = " .. guid)
-    if result then
-        repeat
-            local spellId = result:GetUInt32(0)
-            player:RemoveSpell(spellId)
-        until not result:NextRow()
-    end
+    -- if result then
+    --     repeat
+    --         local spellId = result:GetUInt32(0)
+    --         player:RemoveSpell(spellId)
+    --     until not result:NextRow()
+    -- end
     CharDBExecute("DELETE FROM drafted_spells WHERE player_guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_rewarded WHERE guid = " .. guid)
@@ -803,7 +786,11 @@ local function DoDraftEnd(player)
     end
 
     -- Reset draft state
-    CharDBExecute("UPDATE prestige_stats SET draft_state = 0 WHERE player_id = " .. guid)
+    if player:GetLevel() >= CONFIG.MAX_LEVEL then
+        CharDBExecute("UPDATE prestige_stats SET draft_state = 0, prestige_level = prestige_level + 1 WHERE player_id = " .. guid)
+    else
+        CharDBExecute("UPDATE prestige_stats SET draft_state = 0 WHERE player_id = " .. guid)
+    end
 
     RemoveAndMailEquippedItems(player)
     player:SetLevel(originalClass == 6 and 55 or 1)
@@ -885,7 +872,14 @@ local function OnGossipSelect(event, player, creature, sender, intid)
     elseif intid == 4 then
         ShowDraftConfirmation(player, creature)
     elseif intid == 100 then
-        DoPrestige(player, false) -- normal prestige
+    local q = CharDBQuery("SELECT draft_state, stored_class FROM prestige_stats WHERE player_id = " .. guid)
+        if q then
+            local draftState = q:GetUInt32(0)
+            if draftState == 1 then
+                DoDraftEnd(player)
+            end
+        end
+    DoPrestige(player, false)
     elseif intid == 101 then
         DoPrestige(player, true)  -- draft mode prestige
     elseif intid == 200 then
