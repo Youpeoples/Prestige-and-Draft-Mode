@@ -1,6 +1,15 @@
 -- Create a hidden tooltip for reading spell descriptions
 local tooltip = CreateFrame("GameTooltip", "DummyTooltip", UIParent, "GameTooltipTemplate")
 local totalDrafts = 0
+local rarityTextures = {
+  "COMM.tga",  -- Common
+  "UNCO.tga",  -- Uncommon
+  "RARE.tga",  -- Rare
+  "EPIC.tga",  -- Epic
+  "LEGE.tga",  -- Legendary
+  "BROK.tga",  -- Broken (joke/trap cards?)
+}
+local currentSpellRarities = {}
 tooltip:SetOwner(UIParent, "ANCHOR_NONE")
 GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
 GameTooltip:SetFrameStrata("TOOLTIP")
@@ -36,7 +45,7 @@ local function Delay(seconds, func)
 end
 local function UpdateRerollButton()
   if not SpellChoiceRerollButton then return end
-  SpellChoiceRerollButton:SetText("Rerolls (" .. rerollsLeft .. ")")
+  SpellChoiceRerollButton:SetText("Reroll (" .. rerollsLeft .. ")")
 
   if rerollsLeft > 0 then
     SpellChoiceRerollButton:Enable()
@@ -51,8 +60,13 @@ end
 
 -- Request prestige status on login/reload
 local function RequestPrestigeStatus()
-  SendChatMessage("SC_CHECK", "WHISPER", nil, UnitName("player"))
-  Debug("Sent SC_CHECK to server")
+  local target = UnitName("player")
+  if target then
+    SendChatMessage("SC_CHECK", "WHISPER", nil, UnitName("player"))
+    Debug("Sent SC_CHECK to server")
+  else
+    print("SpellChoice: Failed to send SC message — player name is nil.")
+  end
 end
 
 -- Show spell choices to the player
@@ -93,6 +107,19 @@ local function ShowSpellChoices(spellIDs)
         btn:SetID(spellID)
         btn.icon:SetTexture(icon)
         btn.name:SetText(name)
+        local rarityFrame = _G[btn:GetName() .. "Rarity"]
+        local rarityIndex = currentSpellRarities[i] or -1
+        if rarityFrame and rarityIndex >= 0 then
+          local rarityTex = rarityTextures[rarityIndex + 1]
+          if rarityTex then
+            rarityFrame:SetTexture("Interface\\AddOns\\PrestigeSystem\\Textures\\" .. rarityTex)
+            rarityFrame:Show()
+          else
+            rarityFrame:Hide()
+          end
+        elseif rarityFrame then
+          rarityFrame:Hide()
+        end
         tooltip:ClearLines()
         tooltip:SetHyperlink("spell:" .. spellID)
 
@@ -116,6 +143,10 @@ local function ShowSpellChoices(spellIDs)
         btn.description:SetText("Spell data not cached.")
         btn.levelReq:SetText("")
         btn:Show()
+        local rarityFrame = _G[btn:GetName() .. "Rarity"]
+        if rarityFrame then
+          rarityFrame:Hide()
+        end
       end
     else
       Debug("Invalid spell or button at index " .. tostring(i))
@@ -172,10 +203,38 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
       UpdateRerollButton()
 
     elseif prefix == "SpellChoiceDrafts" then
+      print("CLIENT RECEIVED: SpellChoiceDrafts =", message)
       Debug("Received SpellChoiceDrafts with message: " .. message)
       local totalDrafts = tonumber(message) or 0
       if SpellChoiceTitle then
         SpellChoiceTitle:SetText("" .. totalDrafts .. " Drafts Remaining")
+      end
+    elseif prefix == "SpellChoiceRarities" then
+      currentSpellRarities = {}
+      for r in string.gmatch(message, "-?%d+") do
+        table.insert(currentSpellRarities, tonumber(r))
+      end
+      local rarities = {}
+      for r in string.gmatch(message, "-?%d+") do
+        table.insert(rarities, tonumber(r))
+      end
+
+      for i, rarity in ipairs(rarities) do
+        local btn = buttons[i]
+        local rarityFrame = _G[btn:GetName() .. "Rarity"]
+
+        if rarity and rarity >= 0 then
+          local rarityTex = rarityTextures[rarity + 1]
+          if rarityTex and rarityFrame then
+            rarityFrame:SetTexture("Interface\\AddOns\\PrestigeSystem\\Textures\\" .. rarityTex)
+            rarityFrame:Show()
+          elseif rarityFrame then
+            rarityFrame:Hide()
+          end
+        elseif rarityFrame then
+          -- Rarity is -1 or invalid (NULL or missing)
+          rarityFrame:Hide()
+        end
       end
     end
   end
@@ -199,7 +258,12 @@ for _, btn in ipairs(buttons) do
 btn:SetScript("OnClick", function(self)
     local spellID = self:GetID()
     if spellID and spellID > 0 then
-      SendChatMessage("SC:" .. spellID, "WHISPER", nil, UnitName("player"))
+      local target = UnitName("player")
+      if target then
+        SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+      else
+        print("SpellChoice: Failed to send SC message — player name is nil.")
+      end
     end
   end)
 
@@ -211,7 +275,7 @@ end
 local rerollCooldown = false
 
 SpellChoiceRerollButton:SetScript("OnClick", function()
-  if rerollCooldown or not unlocked or UnitLevel("player") == 1 or rerollsLeft <= 0 then
+  if rerollCooldown or not unlocked or rerollsLeft <= 0 then
     UIErrorsFrame:AddMessage("Cannot reroll at this time.", 1, 0, 0, 1)
     return
   end
@@ -224,7 +288,34 @@ SpellChoiceRerollButton:SetScript("OnClick", function()
     UpdateRerollButton() -- Re-enables if rerollsLeft > 0
   end)
 
-  SendChatMessage("SC_REROLL", "WHISPER", nil, UnitName("player"))
+  local target = UnitName("player")
+  if target then
+    SendChatMessage("SC_REROLL", "WHISPER", nil, target)
+  else
+    print("SpellChoice: Failed to send SC_REROLL — player name is nil.")
+  end
 end)
 
+local dismissToggled = false
 
+SpellChoiceDismissButton:SetScript("OnClick", function(self)
+  dismissToggled = not dismissToggled
+
+  if dismissToggled then
+    -- Hide all UI EXCEPT the dismiss button
+    local label = SpellChoiceTitle:GetText() or ""
+    local count = label:match("(%d+)") or "0"
+    self:SetText(count .. " Drafts Left")
+
+    -- Hide the main frame but keep button visible
+    for _, btn in ipairs(buttons) do btn:Hide() end
+    SpellChoiceTitle:Hide()
+    SpellChoiceRerollButton:Hide()
+  else
+    -- Restore everything
+    self:SetText("Dismiss")
+    for _, btn in ipairs(buttons) do btn:Show() end
+    SpellChoiceTitle:Show()
+    SpellChoiceRerollButton:Show()
+  end
+end)

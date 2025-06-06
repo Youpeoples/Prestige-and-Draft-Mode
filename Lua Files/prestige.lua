@@ -70,18 +70,30 @@ local function EnsurePrestigeEntry(_, player)
             local p = GetPlayerByGUID(guid)
             if not p then return end
 
+            -- Always assign prestige title
             GivePrestigeTitle(guid, prestigeLevel)
 
+            -- Sync draft title 535
+            local hasTitle = p:HasTitle(535)
             if draftState == 1 then
+                if not hasTitle then
+                    p:SetKnownTitle(535)
+                    print("[DraftTitle] Given title 535 to player: " .. p:GetName())
+                end
                 ApplyDraftPowerTypes(p)
                 StartDraftPowerTicker(p)
+            elseif hasTitle then
+                p:UnsetKnownTitle(535)
+                print("[DraftTitle] Removed title 535 from player: " .. p:GetName())
             end
         end, 3000, 1)
+
     else
         local class = player:GetClass()
         CharDBExecute("INSERT INTO prestige_stats (player_id, prestige_level, draft_state, stored_class) VALUES (" .. guid .. ", 0, 0, " .. class .. ")")
     end
 end
+
 
 -- Apply draft state if needed
 local function OnRebuildEvent(_, player)

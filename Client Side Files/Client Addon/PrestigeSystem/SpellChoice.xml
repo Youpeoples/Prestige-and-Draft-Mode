@@ -38,6 +38,15 @@
       </Texture>
     </Layer>
 
+  <Layer level="OVERLAY">
+    <Texture name="$parentRarity" file="Interface\AddOns\PrestigeSystem\Textures\COMM.tga">
+      <Size x="32" y="32"/>
+      <Anchors>
+        <Anchor point="TOP" relativeTo="$parentIcon" relativePoint="BOTTOM" x="-0" y="18"/>
+      </Anchors>
+    </Texture>
+  </Layer>
+
     <Layer level="OVERLAY">
       <FontString name="$parentLevelReq" inherits="GameFontNormalSmall">
         <Anchors>
@@ -46,17 +55,6 @@
         <Color r="1.0" g="0.82" b="0.0"/>
       </FontString>
     </Layer>
-
-    <!-- Highlight Glow -->
-    <Layer level="HIGHLIGHT">
-      <Texture name="$parentHighlight" file="Interface\AddOns\PrestigeSystem\Textures\card.tga" alphaMode="ADD">
-        <Size><AbsDimension x="256" y="256"/></Size>
-        <Anchors>
-          <Anchor point="CENTER"/>
-        </Anchors>
-      </Texture>
-    </Layer>
-
     <!-- Selection Border -->
     <Layer level="OVERLAY">
       <Texture name="$parentSelectionBorder" file="Interface\Buttons\UI-ActionButton-Border" hidden="true">
@@ -120,7 +118,7 @@
       <Button name="SpellChoiceRerollButton" inherits="UIPanelButtonTemplate" text="Reroll">
         <Size><AbsDimension x="100" y="24"/></Size>
         <Anchors>
-          <Anchor point="TOP" relativeTo="SpellChoiceButton2" relativePoint="BOTTOM" x="0" y="0"/>
+          <Anchor point="BOTTOM" relativeTo="SpellChoiceTitle" relativePoint="TOP" x="0" y="10"/>
         </Anchors>
         <Scripts>
           <OnClick>
@@ -128,6 +126,15 @@
               SpellChoiceFrame:RerollChoices()
             end
           </OnClick>
+        </Scripts>
+      </Button>
+      <!-- Dismiss Button -->
+      <Button name="SpellChoiceDismissButton" inherits="UIPanelButtonTemplate" text="Dismiss">
+        <Size><AbsDimension x="100" y="24"/></Size>
+        <Anchors>
+          <Anchor point="BOTTOM" relativeTo="SpellChoiceTitle" relativePoint="TOP" x="0" y="-290"/>
+        </Anchors>
+        <Scripts>
         </Scripts>
       </Button>
     </Frames>

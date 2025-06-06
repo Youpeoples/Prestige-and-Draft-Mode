@@ -346,6 +346,12 @@ local function OnLevelUp(event, player, oldLevel)
         print("[DEBUG] New spells for " .. player:GetName() .. ": " .. data)
         player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
+        local rarityParts = {}
+        for _, id in ipairs(spells) do
+            local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+            table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+        end
+        player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
     else
         print("[DEBUG] Player already has pending draft. Resending existing spells.")
 
@@ -353,6 +359,12 @@ local function OnLevelUp(event, player, oldLevel)
         local data = table.concat(existing, ",")
         player:SendBroadcastMessage("[DEBUG] Resending existing spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
+        local rarityParts = {}
+        for _, id in ipairs(existing) do
+            local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+            table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+        end
+        player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
     end
 
 end
@@ -423,6 +435,12 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         player:SendAddonMessage("SpellChoice", data, 0, player)
         local rerolls = result:GetUInt32(1) - 1
         player:SendAddonMessage("SpellChoiceRerolls", tostring(rerolls), 0, player)
+        local rarityParts = {}
+        for _, id in ipairs(spells) do
+            local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+            table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+        end
+        player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
         return false
     end
 
@@ -452,6 +470,12 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         local data = table.concat(spells, ",")
         print("[SpellChoice] Auto-reroll (duplicate spell) for " .. player:GetName() .. ": " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
+        local rarityParts = {}
+        for _, id in ipairs(spells) do
+            local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+            table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+        end
+        player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
         return false
     end
 
@@ -506,6 +530,12 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
             print("[SpellChoice] Follow-up draft for " .. player:GetName() .. ": " .. data)
             player:SendBroadcastMessage("[DEBUG] Sending follow-up spell choices: " .. data)
             player:SendAddonMessage("SpellChoice", data, 0, player)
+            local rarityParts = {}
+            for _, id in ipairs(spells) do
+                local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+                table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+            end
+            player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
         end
     end
 
@@ -545,6 +575,12 @@ local function BeginDraftLoop(player, guid, rerolls, successful, expected)
     print("[DEBUG] (Login) Pending draft for " .. player:GetName() .. ": " .. data)
     player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
     player:SendAddonMessage("SpellChoice", data, 0, player)
+    local rarityParts = {}
+    for _, id in ipairs(spells) do
+        local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+        table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+    end
+    player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
 end
 
 -- Player login hook
@@ -659,6 +695,12 @@ local function OnZoneChanged(event, player, newZone, newArea)
             print("[SpellChoice] Zone-triggered draft for " .. p:GetName() .. ": " .. data)
             p:SendBroadcastMessage("[DEBUG] Sending zone-triggered spell choices: " .. data)
             p:SendAddonMessage("SpellChoice", data, 0, p)
+            local rarityParts = {}
+            for _, id in ipairs(spells) do
+                local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+                table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+            end
+            p:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, p)
         end, 2000, 1)
     end
 end
