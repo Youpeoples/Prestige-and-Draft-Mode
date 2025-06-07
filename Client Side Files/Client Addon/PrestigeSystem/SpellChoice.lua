@@ -9,6 +9,8 @@ local rarityTextures = {
   "LEGE.tga",  -- Legendary
   "BROK.tga",  -- Broken (joke/trap cards?)
 }
+local lastSpellIDs = {}
+local dismissToggled = false
 local currentSpellRarities = {}
 tooltip:SetOwner(UIParent, "ANCHOR_NONE")
 GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
@@ -71,6 +73,26 @@ end
 
 -- Show spell choices to the player
 local function ShowSpellChoices(spellIDs)
+  if dismissToggled then
+    -- Full suppression: disable everything interactable
+    for _, btn in ipairs(buttons) do
+      btn:Hide()
+      btn:EnableMouse(false)
+      btn:SetScript("OnEnter", nil)
+      btn:SetScript("OnLeave", nil)
+      btn:SetScript("OnClick", nil)
+    end
+
+    GameTooltip:Hide()
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
+
+    SpellChoiceFrame:Hide()
+    SpellChoiceFrame:EnableMouse(false)
+    SpellChoiceFrame:SetAlpha(0)
+    return
+  end
+
   --print("SpellChoiceTitle is", SpellChoiceTitle and "found" or "MISSING")
   if not unlocked then
     --Debug("Blocked: Player is not prestiged.")
@@ -113,9 +135,7 @@ local function ShowSpellChoices(spellIDs)
           local rarityTex = rarityTextures[rarityIndex + 1]
           if rarityTex then
             rarityFrame:SetTexture("Interface\\AddOns\\PrestigeSystem\\Textures\\" .. rarityTex)
-            if(rarityFrame) then
-              rarityFrame:Show()
-            end
+            rarityFrame:Show()
           else
             rarityFrame:Hide()
           end
@@ -155,9 +175,8 @@ local function ShowSpellChoices(spellIDs)
       if btn then btn:Hide() end
     end
   end
-  if(frame)then
-    frame:Show()
-  end
+
+  frame:Show()
 end
 
 
@@ -192,6 +211,7 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
         table.insert(spellIDs, tonumber(id))
       end
       Delay(0.5, function()
+        lastSpellIDs = spellIDs 
         ShowSpellChoices(spellIDs)
       end)
 
@@ -206,11 +226,12 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
       UpdateRerollButton()
 
     elseif prefix == "SpellChoiceDrafts" then
-      --print("CLIENT RECEIVED: SpellChoiceDrafts =", message)
-      Debug("Received SpellChoiceDrafts with message: " .. message)
       local totalDrafts = tonumber(message) or 0
       if SpellChoiceTitle then
         SpellChoiceTitle:SetText("" .. totalDrafts .. " Drafts Remaining")
+      end
+      if dismissToggled and SpellChoiceDismissButton then
+        SpellChoiceDismissButton:SetText(totalDrafts .. " Draft(s) Left")
       end
     elseif prefix == "SpellChoiceRarities" then
       currentSpellRarities = {}
@@ -230,9 +251,7 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
           local rarityTex = rarityTextures[rarity + 1]
           if rarityTex and rarityFrame then
             rarityFrame:SetTexture("Interface\\AddOns\\PrestigeSystem\\Textures\\" .. rarityTex)
-            if(rarityFrame) then
-              rarityFrame:Show()
-            end
+            rarityFrame:Show()
           elseif rarityFrame then
             rarityFrame:Hide()
           end
@@ -301,45 +320,77 @@ SpellChoiceRerollButton:SetScript("OnClick", function()
   end
 end)
 
-local dismissToggled = false
 SpellChoiceDismissButton:SetScript("OnClick", function(self)
-  dismissToggled = not dismissToggled
-
-  if dismissToggled then
-    local label = SpellChoiceTitle:GetText() or ""
-    local count = label:match("(%d+)") or "0"
-    self:SetText(count .. " Draft(s) Left")
-
-    for _, btn in ipairs(buttons) do btn:Hide() end
-    SpellChoiceTitle:Hide()
-    SpellChoiceRerollButton:Hide()
-
-    SpellChoiceFrame:EnableMouse(false)
-    SpellChoiceFrame:SetAlpha(0.01)
-
-    -- Reparent to UIParent and anchor to center (or wherever you want)
-    self:SetParent(UIParent)
-    self:ClearAllPoints()
-    self:SetPoint("CENTER", UIParent, "CENTER", 0, -360)  -- <- position when dismissed
-    self:SetFrameStrata("FULLSCREEN_DIALOG")
-    self:EnableMouse(true)
-    self:Show()
-
-  else
-    self:SetText("Dismiss")
-
-    for _, btn in ipairs(buttons) do btn:Show() end
-    SpellChoiceTitle:Show()
-    SpellChoiceRerollButton:Show()
-
-    SpellChoiceFrame:EnableMouse(true)
-    SpellChoiceFrame:SetAlpha(1)
-
-    -- Restore to original parent and layout
-    self:SetParent(SpellChoiceFrame)
-    self:ClearAllPoints()
-    self:SetPoint("BOTTOM", SpellChoiceTitle, "TOP", 0, -310)  -- original position
-    self:SetFrameStrata("FULLSCREEN_DIALOG")
-  end
+    dismissToggled = not dismissToggled
+    if dismissToggled then
+        -- Hide all UI, show small dismiss button at center
+        local label = SpellChoiceTitle:GetText() or ""
+        local count = label:match("(%d+)") or "0"
+        self:SetText(count .. " Draft(s) Left")
+        for _, btn in ipairs(buttons) do
+            btn:Hide()
+            btn:EnableMouse(false)
+            btn:SetScript("OnEnter", nil)
+            btn:SetScript("OnLeave", nil)
+            btn:SetScript("OnClick", nil)
+        end
+        SpellChoiceTitle:Hide()
+        SpellChoiceRerollButton:Hide()
+        SpellChoiceFrame:EnableMouse(false)
+        SpellChoiceFrame:SetAlpha(0.01)
+        -- Reparent dismiss to UIParent for central display
+        self:SetParent(UIParent)
+        self:ClearAllPoints()
+        self:SetPoint("CENTER", UIParent, "CENTER", 0, -300)
+        self:SetFrameStrata("FULLSCREEN_DIALOG")
+        self:EnableMouse(true)
+        self:Show()
+    else
+        -- Toggle back on: fully restore UI
+        self:SetText("Dismiss")
+        if lastSpellIDs and #lastSpellIDs > 0 then
+            ShowSpellChoices(lastSpellIDs)
+        end
+        -- Ensure frame and buttons are visible and interactive again
+        SpellChoiceFrame:EnableMouse(true)
+        SpellChoiceFrame:SetAlpha(1)
+        SpellChoiceFrame:Show()
+        for _, btn in ipairs(buttons) do
+            btn:Show()
+            btn:EnableMouse(true)
+            -- Reattach hover (tooltip) handler
+            btn:SetScript("OnEnter", function(self)
+                local spellID = self:GetID()
+                if spellID and spellID > 0 then
+                    GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
+                    GameTooltip:SetHyperlink("spell:" .. spellID)
+                    GameTooltip:Show()
+                end
+            end)
+            -- Reattach mouse-leave handler
+            btn:SetScript("OnLeave", function(self)
+                GameTooltip:Hide()
+            end)
+            -- Reattach click handler to send the SC:<spellID> whisper
+            btn:SetScript("OnClick", function(self)
+                local spellID = self:GetID()
+                if spellID and spellID > 0 then
+                    local target = UnitName("player")
+                    if target then
+                        SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+                    else
+                        print("SpellChoice: Failed to send SC message — player name is nil.")
+                    end
+                end
+            end)
+        end
+        SpellChoiceTitle:Show()
+        SpellChoiceRerollButton:Show()
+        -- Restore dismiss button to original parent/position
+        self:SetParent(SpellChoiceFrame)
+        self:ClearAllPoints()
+        self:SetPoint("BOTTOM", SpellChoiceTitle, "TOP", 0, -290)
+    end
 end)
+
 

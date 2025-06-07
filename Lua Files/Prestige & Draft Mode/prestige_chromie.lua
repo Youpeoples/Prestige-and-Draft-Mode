@@ -17,7 +17,6 @@ local MAIL_BODY = "Your equipped gear has been returned to you after prestiging.
 local RED = "|cffff0000"
 local YELLOW = "|cffffff00"
 local WHITE = "|cffffffff"
-local draftAddonReady = {} 
 local startingGear = {
   -- ALLIANCE
   ["HUMAN_WARRIOR"] = {
@@ -521,12 +520,13 @@ end
 
 local function ShowPrestigeOptions(player, creature)
     player:GossipClearMenu()
+    local guid = player:GetGUIDLow()
     if player:GetLevel() < MAX_LEVEL then
         player:GossipMenuAddItem(0, prestigeBlockedMessage, 1, 998)
     else
         player:GossipMenuAddItem(4, GetLossListText(), 1, 998)
         player:GossipMenuAddItem(9, RED .. "Prestige", 1, 3)
-        player:GossipMenuAddItem(9, RED .. "Prestige into Draft Mode", 1, 4) -- NEW OPTION
+        player:GossipMenuAddItem(9, RED .. "Prestige into Draft Mode", 1, 4)
     end
     player:GossipMenuAddItem(0, "Back", 1, 0)
     player:GossipSendMenu(1, creature)
@@ -650,7 +650,7 @@ local function DoPrestige(player, draftMode)
     -- Draft mode only:
     if draftMode then
         player:SendBroadcastMessage("Draft Mode: Enabled for next run.")
-        print("[DraftMode] Draft mode enabled for player: " .. player:GetName() .. " (" .. guid .. ")")
+        --print("[DraftMode] Draft mode enabled for player: " .. player:GetName() .. " (" .. guid .. ")")
 
         -- Recalculate current prestige level after increment (safe fallback)
         local prestigeLevel = 1
@@ -682,7 +682,7 @@ local function DoPrestige(player, draftMode)
         ]], DRAFT_MODE_SPELLS, bonusRerolls, storedClass, guid)
 
         CharDBExecute(updateStatsQuery)
-        print("[DraftMode] Updated prestige_stats for " .. guid .. " with " .. bonusRerolls .. " rerolls")
+        --print("[DraftMode] Updated prestige_stats for " .. guid .. " with " .. bonusRerolls .. " rerolls")
         player:SendBroadcastMessage("Draft rerolls granted: " .. bonusRerolls)
     end
     RemoveAndMailEquippedItems(player)
@@ -764,7 +764,7 @@ local function DoPrestige(player, draftMode)
             plr:KickPlayer()
             CreateLuaEvent(function()
                 CharDBExecute("UPDATE characters SET class = 8 WHERE guid = " .. guidLow)
-                print("[DraftMode] Updated class to Mage (8) for " .. guidLow)
+                --print("[DraftMode] Updated class to Mage (8) for " .. guidLow)
             end, 1000, 1)
         end
     end, 500, 1)
@@ -849,7 +849,7 @@ local function DoDraftEnd(player)
 
         CreateLuaEvent(function()
             CharDBExecute("UPDATE characters SET class = " .. originalClass .. " WHERE guid = " .. guidLow)
-            print("[DraftMode] Restored class to " .. originalClass .. " for player " .. guidLow)
+            --print("[DraftMode] Restored class to " .. originalClass .. " for player " .. guidLow)
         end, 1000, 1)
     end, 500, 1)
 end
@@ -891,4 +891,4 @@ end
 
 RegisterCreatureGossipEvent(NPC_ID, 1, OnGossipHello)
 RegisterCreatureGossipEvent(NPC_ID, 2, OnGossipSelect)
-RegisterPlayerEvent(19, OnDraftAddonWhisper)
+

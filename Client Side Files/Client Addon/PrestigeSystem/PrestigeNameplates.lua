@@ -86,12 +86,12 @@ function UpdateCharacterPrestigeLine()
 
     if not prestigeFontString then
         prestigeFontString = CharacterModelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        prestigeFontString:SetPoint("TOP", CharacterLevelText, "BOTTOM", 0, -4)
+        prestigeFontString:SetPoint("LEFT", CharacterLevelText, "RIGHT", 32, 0)
         prestigeFontString:SetTextColor(1, 0.82, 0)
     end
 
     if prestige and prestige > 0 then
-        prestigeFontString:SetText("Prestige Level: " .. prestige)
+        prestigeFontString:SetText("Prestige: " .. prestige)
         prestigeFontString:Show()
     else
         prestigeFontString:SetText("")

@@ -76,13 +76,11 @@ local function EnsurePrestigeEntry(_, player)
             if draftState == 1 then
                 if not hasTitle then
                     p:SetKnownTitle(535)
-                    print("[DraftTitle] Given title 535 to player: " .. p:GetName())
                 end
                 ApplyDraftPowerTypes(p)
                 StartDraftPowerTicker(p)
             elseif hasTitle then
                 p:UnsetKnownTitle(535)
-                print("[DraftTitle] Removed title 535 from player: " .. p:GetName())
             end
         end, 3000, 1)
 

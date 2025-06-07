@@ -649,7 +649,7 @@ local function OnLogin(event, player)
         --print("[DEBUG] totalDrafts remaining:", totalDrafts)
         player:SendAddonMessage("SpellChoiceDrafts", tostring(totalDrafts), 0, player)
     else
-        print("This player is not setup for drafting", playerGuid)
+        --print("This player is not setup for drafting", playerGuid)
     end
 
     local result = CharDBQuery("SELECT draft_state, rerolls, successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
