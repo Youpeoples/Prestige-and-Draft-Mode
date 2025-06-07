@@ -8,8 +8,8 @@ local prestigeDescription = CONFIG.prestigeDescription
 
 local prestigeBlockedMessage = CONFIG.prestigeBlockedMessage
 local prestigeLossList = CONFIG.prestigeLossList
-LOGOUT_TIMER = 10 -- time in seconds to wait after sending back to start before logging out to finish process.
-LOGOUT_AFTER_PRESTIGE_TIMER = LOGOUT_TIMER * 1000
+local LOGOUT_TIMER = 10 -- time in seconds to wait after sending back to start before logging out to finish process.
+local LOGOUT_AFTER_PRESTIGE_TIMER = LOGOUT_TIMER * 1000
 local EQUIP_SLOT_START = 0
 local EQUIP_SLOT_END = 18
 local MAIL_SUBJECT = "Your Returned Gear [Prestige]"
@@ -17,360 +17,7 @@ local MAIL_BODY = "Your equipped gear has been returned to you after prestiging.
 local RED = "|cffff0000"
 local YELLOW = "|cffffff00"
 local WHITE = "|cffffffff"
-local startingGear = {
-  -- ALLIANCE
-  ["HUMAN_WARRIOR"] = {
-    [16] = 49778, -- Worn Greatsword (Two-Hand)
-    [4]  = 38,    -- Recruit's Shirt
-    [7]  = 39,    -- Recruit's Pants
-    [8]  = 40,    -- Recruit's Boots
-    [5]  = 6125   -- Brawler's Harness (Alternate Chest Visual)
-  },
-  ["HUMAN_PALADIN"] = {
-    [4]  = 45,    -- Squire's Shirt
-    [16] = 2361,  -- Battleworn Hammer (Two-Hand)
-    [7]  = 43,    -- Squire's Pants
-    [8]  = 44     -- Footpad Shoes
-  },
-  ["HUMAN_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger
-    [8]  = 47,    -- Footpad Shoes
-    [7]  = 39,    -- Recruit's Pants
-    [4]  = 45     -- Squire's Shirt
-  },
-  ["HUMAN_PRIEST"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 53,    -- Neophyte's Shirt
-    [7]  = 52,    -- Neophyte's Pants
-    [8]  = 51     -- Neophyte's Boots
-  },
-  ["HUMAN_MAGE"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 45,    -- Squire's Shirt
-    [7]  = 39,    -- Squire's Pants
-    [8]  = 55     -- Apprentice's Boots
-  },
-  ["HUMAN_WARLOCK"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 57,    -- Acolyte's Robe
-    [8]  = 59,    -- Acolyte's Shoes
-    [4]  = 6097   -- Acolyte's Shirt
-  },
-  ["NIGHTELF_WARRIOR"] = {
-    [16] = 12282, -- Worn Battleaxe
-    [5]  = 1364,  -- Ragged Leather Vest
-    [7]  = 1366,  -- Ragged Leather Pants
-    [8]  = 1367   -- Ragged Leather Boots
-  },
-  ["NIGHTELF_ROGUE"] = {
-    [5]  = 2105,  -- Thug Shirt
-    [7]  = 120,   -- Thug Pants
-    [8]  = 121,   -- Thug Boots
-    [16] = 2092   -- Worn Dagger
-  },
-  ["NIGHTELF_HUNTER"] = {
-    [18] = 25,  -- Worn Shortbow(RANGED)
-    [17] = 2512,  -- ARROWS
-    [16] = 12282, -- Worn Battleaxe
-    [4]  = 148,   -- Rugged Trapper's Shirt
-    [7]  = 147,   -- Rugged Trapper's Pants
-    [8]  = 129    -- Rugged Trapper's Boots
-  },
-  ["NIGHTELF_DRUID"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 6098,  -- Neophyte's Robe
-    [7]  = 6124,  -- Novice's Pants
-    [8]  = 129    -- Novice's Boots
-  },
-  ["GNOME_WARRIOR"] = {
-    [16] = 25,    -- Worn Shortsword
-    [5]  = 6125,  -- Brawler's Harness
-    [7]  = 38,    -- Recruit's Pants
-    [8]  = 39     -- Recruit's Boots
-  },
-  ["GNOME_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger
-    [8]  = 47,    -- Footpad Shoes
-    [7]  = 39,    -- Recruit's Pants
-    [5]  = 45     -- Squire's Shirt
-  },
-  ["GNOME_MAGE"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 45,    -- Squire's Shirt
-    [7]  = 39,    -- Squire's Pants
-    [8]  = 55     -- Apprentice's Boots
-  },
-  ["GNOME_WARLOCK"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 57,    -- Acolyte's Robe
-    [8]  = 59,    -- Acolyte's Shoes
-    [4]  = 6097   -- Acolyte's Shirt
-  },
-  ["DRAENEI_WARRIOR"] = {
-    [16] = 25,    -- Worn Shortsword
-    [5]  = 6125,  -- Brawler's Harness
-    [7]  = 39,    -- Recruit's Pants
-    [8]  = 39     -- Recruit's Boots
-  },
-  ["DRAENEI_PALADIN"] = {
-    [16] = 2361,  -- Battleworn Hammer
-    [5]  = 43,    -- Squire's Shirt
-    [7]  = 45,    -- Squire's Pants
-    [8]  = 47     -- Footpad Shoes
-  },
-  ["DRAENEI_PRIEST"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 53,    -- Neophyte's Shirt
-    [7]  = 52,    -- Neophyte's Pants
-    [8]  = 51     -- Neophyte's Boots
-  },
-  ["DRAENEI_MAGE"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 45,    -- Squire's Shirt
-    [7]  = 39,    -- Squire's Pants
-    [8]  = 55     -- Apprentice's Boots
-  },
-  ["DRAENEI_SHAMAN"] = {
-    [16] = 36,    -- Worn Mace
-    [3]  = 154,   -- Primitive Mantle
-    [7]  = 153,   -- Primitive Kilt
-    [5]  = 6098   -- Neophyte's Robe
-  },
-  ["DWARF_WARRIOR"] = {
-    [16] = 12282, -- Worn Battleaxe (Two-Hand)
-    [5]  = 6125,  -- Brawler's Harness
-    [7]  = 47,    -- Footpad Pants
-    [8]  = 48     -- Footpad Shoes
-  },
-
-  ["DWARF_PALADIN"] = {
-    [16] = 2361,  -- Battleworn Hammer
-    [5]  = 6074,  -- Novice's Vestments
-    [7]  = 52,    -- Neophyte's Pants
-    [8]  = 51     -- Neophyte's Boots
-  },
-
-  ["DWARF_HUNTER"] = {
-    [16] = 2508,  -- Old Blunderbuss
-    [17] = 2516,  -- BULLETS
-    [5]  = 6130,  -- Trapper's Shirt
-    [7]  = 6135,  -- Primitive Kilt
-    [8]  = 40     -- Recruit's Boots
-  },
-
-  ["DWARF_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger
-    [5]  = 6123,  -- Novice's Shirt
-    [7]  = 120,   -- Thug Pants
-    [8]  = 121    -- Thug Boots
-  },
-
-  ["DWARF_PRIEST"] = {
-    [16] = 35,    -- Bent Staff
-    [5]  = 53,    -- Neophyte's Shirt
-    [7]  = 52,    -- Neophyte's Pants
-    [8]  = 51     -- Neophyte's Boots
-  },
-  -- HORDE
-  ["ORC_WARRIOR"] = {
-    [16] = 25,    -- Worn Shortsword (Main Hand)
-    [5]  = 6125,  -- Brawler's Harness (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 40     -- Recruit's Boots (Feet)
-  },
-  ["ORC_HUNTER"] = {
-    [18] = 25,  -- Worn Shortbow(RANGED)
-    [17] = 2512,  -- ARROWS
-    [16] = 12282, -- Worn Battleaxe (Two-Hand)
-    [5]  = 147,   -- Rugged Trapper's Shirt (Chest)
-    [7]  = 148,   -- Rugged Trapper's Pants (Legs)
-    [8]  = 129    -- Rugged Trapper's Boots (Feet)
-  },
-  ["ORC_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger (Main Hand)
-    [5]  = 45,    -- Squire's Shirt (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 47     -- Footpad Shoes (Feet)
-  },
-  ["ORC_SHAMAN"] = {
-    [16] = 36,    -- Worn Mace (Main Hand)
-    [3]  = 154,   -- Primitive Mantle (Shoulder)
-    [5]  = 6098,  -- Neophyte's Robe (Chest)
-    [7]  = 153    -- Primitive Kilt (Legs)
-  },
-  ["ORC_WARLOCK"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 57,    -- Acolyte's Robe (Chest)
-    [8]  = 59,    -- Acolyte's Shoes (Feet)
-    [4]  = 6097   -- Acolyte's Shirt (Visual Shirt)
-  },
-  ["TROLL_WARRIOR"] = {
-    [16] = 25,    -- Worn Shortsword (Main Hand)
-    [5]  = 6125,  -- Brawler's Harness (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 40     -- Recruit's Boots (Feet)
-  },
-  ["TROLL_HUNTER"] = {
-    [18] = 25,  -- Worn Shortbow(RANGED)
-    [17] = 2512,  -- ARROWS
-    [16] = 12282, -- Worn Battleaxe (Two-Hand)
-    [5]  = 147,   -- Rugged Trapper's Shirt (Chest)
-    [7]  = 148,   -- Rugged Trapper's Pants (Legs)
-    [8]  = 129    -- Rugged Trapper's Boots (Feet)
-  },
-  ["TROLL_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger (Main Hand)
-    [5]  = 45,    -- Squire's Shirt (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 47     -- Footpad Shoes (Feet)
-  },
-  ["TROLL_SHAMAN"] = {
-    [16] = 36,    -- Worn Mace (Main Hand)
-    [3]  = 154,   -- Primitive Mantle (Shoulder)
-    [5]  = 6098,  -- Neophyte's Robe (Chest)
-    [7]  = 153    -- Primitive Kilt (Legs)
-  },
-  ["TROLL_PRIEST"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 53,    -- Neophyte's Shirt (Chest)
-    [7]  = 52,    -- Neophyte's Pants (Legs)
-    [8]  = 51     -- Neophyte's Boots (Feet)
-  },
-  ["TROLL_MAGE"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 45,    -- Squire's Shirt (Chest)
-    [7]  = 39,    -- Squire's Pants (Legs)
-    [8]  = 55     -- Apprentice's Boots (Feet)
-  },
-  ["UNDEAD_WARRIOR"] = {
-    [16] = 25,    -- Worn Shortsword (Main Hand)
-    [5]  = 6125,  -- Brawler's Harness (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 40     -- Recruit's Boots (Feet)
-  },
-  ["UNDEAD_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger (Main Hand)
-    [5]  = 45,    -- Squire's Shirt (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 47     -- Footpad Shoes (Feet)
-  },
-  ["UNDEAD_MAGE"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 45,    -- Squire's Shirt (Chest)
-    [7]  = 39,    -- Squire's Pants (Legs)
-    [8]  = 55     -- Apprentice's Boots (Feet)
-  },
-  ["UNDEAD_WARLOCK"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 57,    -- Acolyte's Robe (Chest)
-    [8]  = 59,    -- Acolyte's Shoes (Feet)
-    [4]  = 6097   -- Acolyte's Shirt (Visual Shirt)
-  },
-  ["UNDEAD_PRIEST"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 53,    -- Neophyte's Shirt (Chest)
-    [7]  = 52,    -- Neophyte's Pants (Legs)
-    [8]  = 51     -- Neophyte's Boots (Feet)
-  },
-  ["TAUREN_WARRIOR"] = {
-    [16] = 25,    -- Worn Shortsword (Main Hand)
-    [5]  = 6125,  -- Brawler's Harness (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 40     -- Recruit's Boots (Feet)
-  },
-  ["TAUREN_DRUID"] = {
-    [17] = 35,    -- Bent Staff (Two-Hand)
-    [5]  = 6098,  -- Neophyte's Robe (Chest)
-    [7]  = 140,   -- Novice's Pants (Legs)
-    [8]  = 139    -- Novice's Boots (Feet)
-  },
-  ["TAUREN_SHAMAN"] = {
-    [16] = 36,    -- Worn Mace (Main Hand)
-    [3]  = 154,   -- Primitive Mantle (Shoulder)
-    [5]  = 6098,  -- Neophyte's Robe (Chest)
-    [7]  = 153    -- Primitive Kilt (Legs)
-  },
-  ["BLOODELF_PALADIN"] = {
-    [16] = 2361,  -- Battleworn Hammer (Main Hand)
-    [5]  = 43,    -- Squire's Shirt (Chest)
-    [7]  = 45,    -- Squire's Pants (Legs)
-    [8]  = 47     -- Footpad Shoes (Feet)
-  },
-  ["BLOODELF_ROGUE"] = {
-    [16] = 2092,  -- Worn Dagger (Main Hand)
-    [5]  = 45,    -- Squire's Shirt (Chest)
-    [7]  = 39,    -- Recruit's Pants (Legs)
-    [8]  = 47     -- Footpad Shoes (Feet)
-  },
-  ["BLOODELF_HUNTER"] = {
-    [18] = 2512,  -- Old Blunderbuss (Ranged)
-    [18] = 2101,  -- Light Quiver (Ammo)
-    [16] = 12282, -- Worn Battleaxe (Two-Hand)
-    [5]  = 147,   -- Rugged Trapper's Shirt (Chest)
-    [7]  = 148,   -- Rugged Trapper's Pants (Legs)
-    [8]  = 129    -- Rugged Trapper's Boots (Feet)
-  },
-  ["BLOODELF_MAGE"] = {
-    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
-    [5]  = 56,      -- Apprentice's Robes (Chest)
-    [7]  = 1395,    -- Apprentice's Pants (Legs)
-    [8]  = 20895    -- Apprentice's Boots (Feet)
-  },
-  ["BLOODELF_PRIEST"] = {
-    [17] = 20978, -- Apprentice's Staff (Two-Hand)
-    [5]  = 53,    -- Neophyte's Shirt (Chest)
-    [7]  = 52,    -- Neophyte's Pants (Legs)
-    [8]  = 51     -- Neophyte's Boots (Feet)
-  },
-  ["BLOODELF_WARLOCK"] = {
-    [17] = 20978, -- Apprentice's Staff (Two-Hand)
-    [5]  = 57,    -- Acolyte's Robe (Chest)
-    [8]  = 59,    -- Acolyte's Shoes (Feet)
-    [4]  = 6097   -- Acolyte's Shirt (Visual Shirt)
-  },
-  ["DEATHKNIGHT"] = {
-    [5]  = 34650, -- Acherus Knight's Tunic (Chest)
-    [10] = 34649, -- Acherus Knight's Gauntlets (Hands)
-    [7]  = 34656, -- Acherus Knight's Legplates (Legs)
-    [8]  = 34648, -- Acherus Knight's Greaves (Feet)
-    [6]  = 34651, -- Acherus Knight's Girdle (Waist)
-    [15] = 34659, -- Acherus Knight's Shroud (Back)
-    [2]  = 34657, -- Choker of Damnation (Neck)
-    [11] = 34658, -- Plague Band (Ring 1)
-    [12] = 38147, -- Corrupted Band (Ring 2)
-    [1]  = 34652  -- Acherus Knight's Hood (Head)
-  },
-  ["ORC_MAGE"] = {
-    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
-    [5]  = 56,      -- Apprentice's Robes (Chest)
-    [7]  = 1395,    -- Apprentice's Pants (Legs)
-    [8]  = 20895    -- Apprentice's Boots (Feet)
-  },
-  ["TROLL_MAGE"] = {
-    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
-    [5]  = 56,      -- Apprentice's Robes (Chest)
-    [7]  = 1395,    -- Apprentice's Pants (Legs)
-    [8]  = 20895    -- Apprentice's Boots (Feet)
-  },
-  ["DWARF_MAGE"] = {
-    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
-    [5]  = 56,      -- Apprentice's Robes (Chest)
-    [7]  = 1395,    -- Apprentice's Pants (Legs)
-    [8]  = 20895    -- Apprentice's Boots (Feet)
-  },
-  ["TAUREN_MAGE"] = {
-    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
-    [5]  = 56,      -- Apprentice's Robes (Chest)
-    [7]  = 1395,    -- Apprentice's Pants (Legs)
-    [8]  = 20895    -- Apprentice's Boots (Feet)
-  },
-  ["NIGHTELF_MAGE"] = {
-    [17] = 20978,   -- Apprentice's Staff (Two-Hand)
-    [5]  = 56,      -- Apprentice's Robes (Chest)
-    [7]  = 1395,    -- Apprentice's Pants (Legs)
-    [8]  = 20895    -- Apprentice's Boots (Feet)
-  },
-}
+local startingGear = CONFIG.startingGear
 
 local function OnDraftAddonWhisper(event, player, msg, msgType, lang, receiver)
     if msg == "DRAFT_READY" and receiver == player:GetName() then
@@ -380,9 +27,20 @@ local function OnDraftAddonWhisper(event, player, msg, msgType, lang, receiver)
     end
 end
 
+local function GetStoredClass(player)
+    local guid = player:GetGUIDLow()
+    local result = CharDBQuery("SELECT stored_class FROM prestige_stats WHERE player_id = " .. guid)
+    if result then
+        local storedClass = result:GetUInt8(0)
+        return storedClass
+    else
+        return nil -- not found
+    end
+end
+
 local function GiveStartingGear(player)
     local race = player:GetRace()
-    local class = player:GetClass()
+    local class = GetStoredClass(player)
 
     local raceNames = {
         [1] = "HUMAN",
@@ -497,17 +155,17 @@ end
 -- Menus
 local function ShowMainMenu(player, creature)
     player:GossipClearMenu()
-    player:GossipMenuAddItem(2, "What is Prestige?", 1, 1)
-    player:GossipMenuAddItem(4, "I would like to prestige!", 1, 2)
-
-    -- ONLY show if player is currently in draft mode
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_QuestionMark:20|t |cffffff00What is Prestige?", 1, 1)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\Achievement_BG_winAB:20|t |cff3399ffI would like to Prestige!", 1, 2)
     local guid = player:GetGUIDLow()
     local result = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
     if result and result:GetUInt32(0) == 1 then
-        player:GossipMenuAddItem(4, RED .. "I wish to end my drafting experience.", 1, 200)
+        player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Head_Human_01:20|t " .. RED .. "I want to QUIT DRAFT", 1, 200)
     end
 
+    -- Exit
     player:GossipMenuAddItem(0, "Goodbye", 1, 999)
+
     player:GossipSendMenu(1, creature)
 end
 
@@ -534,7 +192,9 @@ end
 
 local function ShowConfirmation(player, creature)
     player:GossipClearMenu()
-    player:GossipMenuAddItem(0, "|TInterface\\Icons\\INV_Misc_Bag_10:20|t Prestige requires 10 free inventory slots", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Bag_10:20|t Prestige requires 10 free inventory slots", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\Ability_Hunter_BeastCall:20|t Prestige requires no active pet. Dismiss your pet if you have one", 1, 998)
+
     player:GossipMenuAddItem(0, "", 1, 998) -- Spacer
     player:GossipMenuAddItem(9, RED .. "I am sure I want to Prestige!", 1, 100)
     player:GossipMenuAddItem(0, "Back", 1, 2)
@@ -542,7 +202,9 @@ local function ShowConfirmation(player, creature)
 end
 local function ShowDraftConfirmation(player, creature)
     player:GossipClearMenu()
-    player:GossipMenuAddItem(0, "|TInterface\\Icons\\INV_Misc_Bag_10:20|t Prestige requires 10 free inventory slots", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Bag_10:20|t Prestige requires 10 free inventory slots", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\Ability_Hunter_BeastCall:20|t Prestige requires no active pet. Dismiss your pet if you have one", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Scroll_11:20|t Prestige Draft requires the Patch-P and Prestige&Draft Addon", 1, 998)
     player:GossipMenuAddItem(0, "", 1, 998) -- Spacer
     player:GossipMenuAddItem(9, RED .. "I am sure I want to Prestige into Draft Mode!", 1, 101)
     player:GossipMenuAddItem(0, "Back", 1, 2)
@@ -550,7 +212,8 @@ local function ShowDraftConfirmation(player, creature)
 end
 local function ShowEndDraftConfirmation(player, creature)
     player:GossipClearMenu()
-    player:GossipMenuAddItem(0, "|TInterface\\Icons\\INV_Misc_QuestionMark:20|t This will reset your character as if you prestiged, but without increasing your prestige level.", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_QuestionMark:20|t This will reset your character as if you prestiged, but without increasing your prestige level.", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\Ability_Hunter_BeastCall:20|t This Process requires no active pet. Dismiss your pet if you have one", 1, 998)
     player:GossipMenuAddItem(0, "", 1, 998) -- Spacer
     player:GossipMenuAddItem(9, RED .. "I am sure I want to end Drafting.", 1, 201)
     player:GossipMenuAddItem(0, "Back", 1, 0)
@@ -560,6 +223,23 @@ end
 local function OnGossipHello(event, player, creature)
     ShowMainMenu(player, creature)
 end
+
+local function DeleteAllPlayerPets(playerGUID)
+    local petResults = CharDBQuery("SELECT id FROM character_pet WHERE owner = " .. playerGUID)
+    if not petResults then
+        return
+    end
+
+    repeat
+        local petGuid = petResults:GetUInt32(0)
+        CharDBExecute("DELETE FROM pet_spell WHERE guid = " .. petGuid)
+        CharDBExecute("DELETE FROM character_pet WHERE id = " .. petGuid)
+        CharDBExecute("DELETE FROM pet_aura WHERE guid = " .. petGuid)
+        CharDBExecute("DELETE FROM pet_spell_cooldown WHERE guid = " .. petGuid)
+    until not petResults:NextRow()
+end
+
+
 local function DoPrestige(player, draftMode)
     local guid = player:GetGUIDLow()
     local requiredSlots = 10
@@ -722,6 +402,7 @@ local function DoPrestige(player, draftMode)
     CharDBExecute("DELETE FROM character_queststatus_weekly WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_seasonal WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_monthly WHERE guid = " .. guid)
+    DeleteAllPlayerPets(guid)
 
     -- Teleport and logout
     CreateLuaEvent(function()
@@ -811,6 +492,8 @@ local function DoDraftEnd(player)
     -- Clean up data
     CharDBExecute("DELETE FROM character_action WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_spell WHERE guid = " .. guid)
+
+
     CharDBExecute("DELETE FROM drafted_spells WHERE player_guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_rewarded WHERE guid = " .. guid)
@@ -818,6 +501,7 @@ local function DoDraftEnd(player)
     CharDBExecute("DELETE FROM character_queststatus_weekly WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_seasonal WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_monthly WHERE guid = " .. guid)
+    DeleteAllPlayerPets(guid)
 
     -- Teleport, then logout and restore original class
     CreateLuaEvent(function()
@@ -854,6 +538,17 @@ local function DoDraftEnd(player)
     end, 500, 1)
 end
 
+local function HasActivePetBlockPrestige(player)
+    local petGUID = tostring(player:GetPetGUID())
+    if not petGUID or petGUID == "0" or petGUID == nil then
+        return false
+    end
+    player:SendBroadcastMessage("You must dismiss your pet before prestiging!")
+    player:SendBroadcastMessage("Also make sure you've got 10 free inven. slots!")
+    return true
+end
+
+
 local function OnGossipSelect(event, player, creature, sender, intid)
     local guid = player:GetGUIDLow()
 
@@ -872,19 +567,23 @@ local function OnGossipSelect(event, player, creature, sender, intid)
     elseif intid == 4 then
         ShowDraftConfirmation(player, creature)
     elseif intid == 100 then
+        if HasActivePetBlockPrestige(player) then return end
     local q = CharDBQuery("SELECT draft_state, stored_class FROM prestige_stats WHERE player_id = " .. guid)
         if q then
             local draftState = q:GetUInt32(0)
             if draftState == 1 then
                 DoDraftEnd(player)
+                return
             end
         end
     DoPrestige(player, false)
     elseif intid == 101 then
+        if HasActivePetBlockPrestige(player) then return end
         DoPrestige(player, true)  -- draft mode prestige
     elseif intid == 200 then
         ShowEndDraftConfirmation(player, creature) 
     elseif intid == 201 then
+        if HasActivePetBlockPrestige(player) then return end
         DoDraftEnd(player) 
     end
 end
