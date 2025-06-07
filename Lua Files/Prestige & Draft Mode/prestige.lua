@@ -58,12 +58,12 @@ local function EnsurePrestigeEntry(_, player)
         local prestigeLevel = query:GetUInt32(0)
         local draftState = query:GetUInt32(1)
         
-        if player then
-            local titleId = CONFIG.PrestigeTitles[prestigeLevel]
-            if titleId and not player:HasTitle(titleId) then
-                player:SetKnownTitle(titleId)
-            end
+    if player then
+        local titleId = CONFIG.PrestigeTitles[prestigeLevel]
+        if titleId and not player:HasTitle(titleId) then
+            player:SetKnownTitle(titleId)
         end
+    end
         CreateLuaEvent(function()
             local p = GetPlayerByGUID(guid)
             if not p then return end
