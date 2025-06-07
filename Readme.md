@@ -169,6 +169,29 @@ lua_scripts/prestige_and_spell_choice_config.lua
 Edit this file before deployment to match your server’s design.
 
 ---
+## ❓ Frequently Asked Questions
+
+### Q: Where can I change the rarity of certain spells?
+
+**A:** In  `acore_world.dbc_spells`(NOT to be confused with your servers spell_dbc), you will find a column marked `Rarity`. 
+
+`Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4, Broken =5`
+
+### Q: Do I need to patch my client?
+
+**A:** Yes. The `patch-P.mpq` file enables visual assets and spell support for the Prestige & Draft system. Without it, core features like spell icons and the UI may not function correctly.
+
+### Q: What happens to my gear when I prestige?
+
+**A:** All equipped gear is unequipped and mailed back to you automatically.
+
+### Q: What are the requirements to prestige?
+
+**A:** You must be max level(configurable), have at least 10 free inventory slots, and have no active pet.
+
+### Q: Is this AddOn compatible with other systems?
+
+**A:** The system is self-contained and should not interfere with existing character progression or other custom modules unless they conflict with player class or spell learning behavior.
 
 ## 🙏 Credits & License
 
