@@ -193,6 +193,10 @@ Edit this file before deployment to match your server’s design.
 
 **A:** The system is self-contained and should not interfere with existing character progression or other custom modules unless they conflict with player class or spell learning behavior.
 
+### Q: I don't want to use this mod anymore, how do i cleanly get rid of it?
+
+**A:** Remove the associated scripts from your lua_scripts folder. Optional: Replace serverside dbc files with backups. Thats it.
+
 ## 🙏 Credits & License
 
 * **Author**: Stephen Kania
