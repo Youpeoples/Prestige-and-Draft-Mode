@@ -178,7 +178,7 @@ Edit this file before deployment to match your server’s design.
 
 **A:** In  `acore_world.dbc_spells`(NOT to be confused with your servers spell_dbc), you will find a column marked `Rarity`. 
 
-`Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4, Broken =5`
+`Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4, Broken = 5`
 
 ### Q: Do I need to patch my client?
 
