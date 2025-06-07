@@ -15,7 +15,10 @@ A minimally invasive prestige system that lets characters reset back to level on
 
 ---
 
-**!!Clientside users have to make changes ONLY if they WANT access to Draft Mode. Otherwise your server will behave as normal!!**
+**Client Addon/Patch are NOT required to enjoy your server.**
+
+**Clientside users have to make changes ONLY if they WANT access to Draft Mode. Standard Prestige is available to non-addon users.**
+
 
 ---
 
@@ -175,7 +178,7 @@ Edit this file before deployment to match your server’s design.
 
 **A:** In  `acore_world.dbc_spells`(NOT to be confused with your servers spell_dbc), you will find a column marked `Rarity`. 
 
-`Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4, Broken =5`
+`Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4, Broken = 5`
 
 ### Q: Do I need to patch my client?
 
