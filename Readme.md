@@ -1,8 +1,19 @@
 # Prestige & Draft Mode
+![image](https://github.com/user-attachments/assets/c5a5d4a3-56b7-4887-8eed-2a2e8da7e07f)
 
 **Wrath of the Lich King (3.3.5a)**
 
 A minimally invasive prestige system that lets characters reset back to level one in exchange for unique rewards and progression options. It features both a classic prestige reset and an optional Draft Mode, where players select a new spell from a randomized pool upon each level-up. 
+
+---
+
+## ✨ Key Features
+
+* **Classic Prestige Reset:** Return to level 1 while retaining unique progression titles.
+* **Draft Mode:** At each level‑up, choose from a randomized pool of three spells.
+* **Spell Rarity System:** Player‑usable spells are bucketed into five rarity tiers (Common, Uncommon, Rare, Epic, Legendary), with configurable distribution to ensure balanced and meaningful draft pools.
+
+---
 
 **!!Clientside users have to make changes ONLY if they WANT access to Draft Mode. Otherwise your server will behave as normal!!**
 
@@ -143,8 +154,8 @@ Restart the client. The AddOn and data patch enable the in-game UI for drafting 
 
 1. **Level a character** to max (default 70).
 2. **Interact** with the Prestige NPC (or Chromie) to select between Standard and Draft Prestige.
-4. **Enjoy** prestige progression!
-
+3. **Enjoy** prestige progression!
+4. **Option Available** to quit draft mode at any time and revert to normal prestige by speaking to Prestige NPC.
 ---
 
 ## 📜 Configuration
@@ -152,7 +163,7 @@ Restart the client. The AddOn and data patch enable the in-game UI for drafting 
 All adjustable parameters (NPC IDs, max level, rerolls, etc.) live in:
 
 ```
-Lua Files/prestige_and_spell_choice_config.lua
+lua_scripts/prestige_and_spell_choice_config.lua
 ```
 
 Edit this file before deployment to match your server’s design.
@@ -165,4 +176,4 @@ Edit this file before deployment to match your server’s design.
 * **License**: MIT License (see `LICENSE`)
 * **Based on**: AzerothCore, TrinityCore, and Eluna
 
-Enjoy prestiging!
+Happy Drafting!
