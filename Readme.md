@@ -15,7 +15,7 @@ A minimally invasive prestige system that lets characters reset back to level on
 
 ---
 
-**!!Clientside users have to make changes ONLY if they WANT access to Draft Mode. Otherwise your server will behave as normal!!**
+** !! Clientside users have to make changes ONLY if they WANT access to Draft Mode. Standard Prestige is available to non-addon users. Client Addon/Patch are NOT required to enjoy your server. !! **
 
 ---
 
