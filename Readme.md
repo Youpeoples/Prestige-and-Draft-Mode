@@ -12,7 +12,7 @@ A minimally invasive prestige system that lets characters reset back to level on
 * **Classic Prestige Reset:** Return to level 1 while retaining unique progression titles.
 * **Draft Mode:** At each level‑up, choose from a randomized pool of three spells.
 * **Spell Rarity System:** Player‑usable spells are bucketed into five rarity tiers (Common, Uncommon, Rare, Epic, Legendary), with configurable distribution to ensure balanced and meaningful draft pools.
-* **AutoLearn:** Spells you've drafted automatically scale with your level — no need to visit a trainer. Each time you draft a new spell, all previously learned spells are upgraded to their highest rank available for your current level.
+* **AutoLearn:** Spells you've drafted automatically scale with your level. Each time you draft a new spell, all previously learned spells are upgraded to their highest rank available for your current level.
 
 ---
 
@@ -156,7 +156,7 @@ Restart the client. The AddOn and data patch enable the in-game UI for drafting 
 
 ## 🚀 Usage
 
-1. **Level a character** to max (default 70).
+1. **Level a character** to max (configurable).
 2. **Interact** with the Prestige NPC (or Chromie) to select between Standard and Draft Prestige.
 3. **Enjoy** prestige progression!
 4. **Option Available** to quit draft mode at any time and revert to normal prestige by speaking to Prestige NPC.
