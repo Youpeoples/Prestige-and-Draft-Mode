@@ -9,7 +9,7 @@ CONFIG = {
 
     DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL = 5, --Everytime a player prestiges, on the next run they get this many rerolls at start formula being (players prestige total count * DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL)
 
-    INCLUDE_RARITY_5 = false, --These are broken(like infinitely spammable, they stil function, spells. This will ruin any sort of balance on your server. But if you're singleplayer, who cares?
+    INCLUDE_RARITY_5 = false, --These are broken(like infinitely spammable)spells. They Function but This will ruin any sort of balance on your server. But if you're singleplayer, who cares?
 
     REROLLS_PER_LEVELUP = 2, --How many extra rerolls a player gets per levelup while in Draft Mode
 
