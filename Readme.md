@@ -12,6 +12,7 @@ A minimally invasive prestige system that lets characters reset back to level on
 * **Classic Prestige Reset:** Return to level 1 while retaining unique progression titles.
 * **Draft Mode:** At each level‑up, choose from a randomized pool of three spells.
 * **Spell Rarity System:** Player‑usable spells are bucketed into five rarity tiers (Common, Uncommon, Rare, Epic, Legendary), with configurable distribution to ensure balanced and meaningful draft pools.
+* **AutoLearn:** Spells you've drafted automatically scale with your level — no need to visit a trainer. Each time you draft a new spell, all previously learned spells are upgraded to their highest rank available for your current level.
 
 ---
 
