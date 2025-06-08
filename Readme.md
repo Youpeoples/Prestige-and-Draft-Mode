@@ -64,7 +64,7 @@ A minimally invasive prestige system that lets characters reset back to level on
 * A working WoW 3.3.5a client
 
 ---
-(There are simpler to follow install instructions found in Install_Guide.txt)
+(There are more novice friendly install instructions found in Install_Guide.txt)
 ## 🛠️ Server-Side Installation
 
 Follow these steps on your server machine:
@@ -197,7 +197,7 @@ Edit this file before deployment to match your server’s design.
 
 **A:** The system is self-contained and should not interfere with existing character progression or other custom modules unless they conflict with player class or spell learning behavior.
 
-### Q: I don't want to use this mod anymore, how do i cleanly get rid of it?
+### Q: I don't want to use this mod anymore, how do i get rid of it?
 
 **A:** Remove the associated scripts from your lua_scripts folder. Optional: Replace serverside dbc files with backups. Thats it.
 
