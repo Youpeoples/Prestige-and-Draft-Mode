@@ -156,6 +156,25 @@ local function ShowSpellChoices(spellIDs)
 
         --btn.description:SetText(table.concat(descriptionLines, "\n"))
         --btn.levelReq:SetText("Required level: 1")
+        btn:SetScale(0.8)
+        btn:SetAlpha(0)
+        UIFrameFadeIn(btn, 0.6, 0, 1)
+
+      local t = 0
+      local pulseSpeed = 10  -- Adjust for faster or slower animation
+      local pulseDuration = (2 * math.pi) / pulseSpeed  -- One full pulse (0 -> up -> down -> 0)
+
+      btn:SetScript("OnUpdate", function(self, elapsed)
+          t = t + elapsed
+          if t >= pulseDuration then
+              self:SetScript("OnUpdate", nil)
+              self:SetScale(1) -- Reset to natural size
+          else
+              local scale = 1 + 0.05 * math.sin(t * pulseSpeed)
+              self:SetScale(scale)
+          end
+      end)
+        btn:EnableMouse(true)
         btn:Show()
       else
         Debug("Missing data for spell ID: " .. tostring(spellID))
@@ -164,6 +183,7 @@ local function ShowSpellChoices(spellIDs)
         btn.name:SetText("Unknown Spell")
         btn.description:SetText("Spell data not cached.")
         btn.levelReq:SetText("")
+        btn:EnableMouse(true)
         btn:Show()
         local rarityFrame = _G[btn:GetName() .. "Rarity"]
         if rarityFrame then
@@ -280,16 +300,32 @@ for _, btn in ipairs(buttons) do
     GameTooltip:Hide()
   end)
 btn:SetScript("OnClick", function(self)
+    PlaySound("igMainMenuOptionCheckBoxOn")
     local spellID = self:GetID()
     if spellID and spellID > 0 then
-      local target = UnitName("player")
-      if target then
-        SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
-      else
-        print("SpellChoice: Failed to send SC message — player name is nil.")
-      end
+        local target = UnitName("player")
+        if target then
+            -- Fade out the other two buttons
+            for _, otherBtn in ipairs(buttons) do
+                if otherBtn ~= self then
+                    UIFrameFadeOut(otherBtn, 0.3, 1, 0)
+                    otherBtn:EnableMouse(false)
+                end
+            end
+
+            -- Prevent multiple clicks
+            self:EnableMouse(false)
+
+            -- Delay to let the fade animation play before sending
+            Delay(0.35, function()
+                SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+            end)
+        else
+            print("SpellChoice: Failed to send SC message — player name is nil.")
+        end
     end
-  end)
+end)
+
 
 
 end
@@ -299,6 +335,7 @@ end
 local rerollCooldown = false
 
 SpellChoiceRerollButton:SetScript("OnClick", function()
+  PlaySound("igMainMenuOptionCheckBoxOn")
   if rerollCooldown or not unlocked or rerollsLeft <= 0 then
     UIErrorsFrame:AddMessage("Cannot reroll at this time.", 1, 0, 0, 1)
     return
@@ -321,6 +358,7 @@ SpellChoiceRerollButton:SetScript("OnClick", function()
 end)
 
 SpellChoiceDismissButton:SetScript("OnClick", function(self)
+    PlaySound("igMainMenuOptionCheckBoxOn")
     dismissToggled = not dismissToggled
     if dismissToggled then
         -- Hide all UI, show small dismiss button at center
@@ -356,6 +394,7 @@ SpellChoiceDismissButton:SetScript("OnClick", function(self)
         SpellChoiceFrame:SetAlpha(1)
         SpellChoiceFrame:Show()
         for _, btn in ipairs(buttons) do
+            btn:EnableMouse(true)
             btn:Show()
             btn:EnableMouse(true)
             -- Reattach hover (tooltip) handler
@@ -373,7 +412,8 @@ SpellChoiceDismissButton:SetScript("OnClick", function(self)
             end)
             -- Reattach click handler to send the SC:<spellID> whisper
             btn:SetScript("OnClick", function(self)
-                local spellID = self:GetID()
+    PlaySound("igMainMenuOptionCheckBoxOn")
+    local spellID = self:GetID()
                 if spellID and spellID > 0 then
                     local target = UnitName("player")
                     if target then
@@ -394,3 +434,11 @@ SpellChoiceDismissButton:SetScript("OnClick", function(self)
 end)
 
 
+local flash = SpellChoiceFrame:CreateTexture(nil, "OVERLAY")
+flash:SetAllPoints(SpellChoiceFrame)
+flash:SetColorTexture(1, 1, 1)
+flash:SetAlpha(0)
+UIFrameFadeIn(flash, 0.1, 0, 0.8)
+Delay(0.1, function()
+    UIFrameFadeOut(flash, 0.4, 0.8, 0)
+end)

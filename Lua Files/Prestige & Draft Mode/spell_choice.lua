@@ -277,6 +277,8 @@ local function UpgradeKnownSpells(player)
 
                             draftingPlayers[guid] = true
                             player:LearnSpell(candidateId)
+                            player:CastSpell(player,24312,true)
+                            player:RemoveAura(24312)
                             draftingPlayers[guid] = nil
 
                             upgraded = upgraded + 1
@@ -526,16 +528,22 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
     end
     draftingPlayers[guid] = true
     player:LearnSpell(spellId)
+    player:CastSpell(player,24312,true)
+    player:RemoveAura(24312)
     -- Additional spell groups
     if spellId == 1515 then
         local extraSpells = {883, 2641, 6991, 982, 136}
         for _, sid in ipairs(extraSpells) do
             player:LearnSpell(sid)
+    player:CastSpell(player,24312,true)
+    player:RemoveAura(24312)
         end
     elseif spellId == 47241 then
         local extraSpells = {50581, 59671, 54785, 50589}
         for _, sid in ipairs(extraSpells) do
             player:LearnSpell(sid)
+    player:CastSpell(player,24312,true)
+    player:RemoveAura(24312)
         end
     end
     draftingPlayers[guid] = nil
