@@ -10,26 +10,85 @@ local draftingPlayers = {}
 -- indexed like: justBlockedSpells[guid][spellId] = true
 local justBlockedSpells = {}
 local lastSpellChoiceSent = {}
-local spellChoicesPerPlayer = {}
 
-local spellChoices = {}
--- List of exact spell IDs to exclude
-local blacklistedSpellIds = {
-}
+-- Holds the full valid pool per player
+local fullSpellPools = {}
+-- Holds the current 3 choices shown to player
 
-local function LoadSpellsFromDB(guid)
-    local res = CharDBQuery("SELECT offered_spell_1, offered_spell_2, offered_spell_3 FROM prestige_stats WHERE player_id = " .. guid)
-    if res then
-        local spells = {
-            res:GetUInt32(0),
-            res:GetUInt32(1),
-            res:GetUInt32(2)
-        }
-        spellChoicesPerPlayer[guid] = spells
-        return spells
+local currentDraftChoices = {}-- List of exact spell IDs to exclude
+local blacklistedSpellIds = {}
+-- Utility: shuffle and select N random spells
+local function GetRandomSpells(num, guid, excludeSet)
+    local copy = {}
+    for _, id in ipairs(fullSpellPools[guid] or {}) do
+        -- Skip if this spell is banned for this player
+        local banned = CharDBQuery("SELECT 1 FROM draft_bans WHERE player_id = " .. guid .. " AND spell_id = " .. id)
+        if not banned and not (excludeSet and excludeSet[id]) then
+            table.insert(copy, id)
+        end
     end
-    return nil
+
+    -- Shuffle and return
+    for i = #copy, 2, -1 do
+        local j = math.random(i)
+        copy[i], copy[j] = copy[j], copy[i]
+    end
+
+    local result = {}
+    local seen = {}
+    for i = 1, #copy do
+        local id = copy[i]
+        if not seen[id] then
+            table.insert(result, id)
+            seen[id] = true
+        end
+        if #result >= num then break end
+    end
+
+    if #result < num then
+        print(string.format("[SpellChoice] Warning: Only %d/%d unique spells found for player %d", #result, num, guid))
+    end
+    return result
 end
+local function LoadSpellsFromDB(guid)
+    local banned = {}
+    local banQ = CharDBQuery("SELECT spell_id FROM draft_bans WHERE player_id = " .. guid)
+    if banQ then
+        repeat
+            banned[banQ:GetUInt32(0)] = true
+        until not banQ:NextRow()
+    end
+
+    local res = CharDBQuery("SELECT offered_spell_1, offered_spell_2, offered_spell_3 FROM prestige_stats WHERE player_id = " .. guid)
+    if not res then return nil end
+
+    local spells = {}
+    for i = 0, 2 do
+        local id = res:GetUInt32(i)
+        if id and id > 0 and not banned[id] then
+            table.insert(spells, id)
+        end
+    end
+
+    -- Replace banned slots with new picks from pool
+    if #spells < 3 then
+        local needed = 3 - #spells
+        local fill = GetRandomSpells(needed, guid)
+        for _, id in ipairs(fill) do
+            table.insert(spells, id)
+        end
+
+        -- Update DB with cleaned set
+        CharDBExecute(string.format("UPDATE prestige_stats SET offered_spell_1 = %d, offered_spell_2 = %d, offered_spell_3 = %d WHERE player_id = %d",
+            spells[1] or 0, spells[2] or 0, spells[3] or 0, guid))
+
+        print(string.format("[SpellChoice] Replaced banned spells on load for player %d → %d,%d,%d", guid, spells[1] or 0, spells[2] or 0, spells[3] or 0))
+    end
+
+    currentDraftChoices[guid] = spells
+    return spells
+end
+
 
 local function SaveSpellsToDB(guid, spells)
     CharDBExecute(string.format([[
@@ -51,7 +110,23 @@ end
 
 -- Main loader function with randomization and filtering
 local function LoadValidSpellChoices(player, maxLevel)
-    spellChoices = {}
+    local guid = player:GetGUIDLow()
+    local pool = {}
+    -- Fetch all banned spell *names* to exclude all ranks
+    local bannedNames = {}
+    local banQ = CharDBQuery("SELECT spell_id FROM draft_bans WHERE player_id = " .. guid)
+    if banQ then
+        repeat
+            local bannedId = banQ:GetUInt32(0)
+            local nameQ = WorldDBQuery("SELECT Name_Lang_enUS FROM dbc_spells WHERE Id = " .. bannedId)
+            if nameQ and not nameQ:IsNull(0) then
+                local name = nameQ:GetString(0)
+                bannedNames[name] = true
+                --print(string.format("[SpellChoice] Banned name: \"%s\" from spell ID %d", name, bannedId))
+            end
+        until not banQ:NextRow()
+    end
+    fullSpellPools[guid] = pool
     math.randomseed(os.time())
 
     -- Step 1: Load known spells
@@ -87,7 +162,7 @@ local function LoadValidSpellChoices(player, maxLevel)
     ]])
 
     if not query then
-        print("[SpellChoice] No valid spells found.")
+        --print("[SpellChoice] No valid spells found.")
         return
     end
 
@@ -116,9 +191,14 @@ local function LoadValidSpellChoices(player, maxLevel)
                    and spell.desc ~= ''
                    and spell.name ~= ''
                    and spell.iconId > 1
+                   and not bannedNames[spell.name]
                 then
-                    table.insert(categorized[rarity], spellId)
-                    totalAccepted = totalAccepted + 1
+                    if bannedNames[spell.name] then
+                        --print(string.format("[SpellChoice] Excluded spell ID %d (%s) due to banned name match", spellId, spell.name))
+                    else
+                        table.insert(categorized[rarity], spellId)
+                        totalAccepted = totalAccepted + 1
+                    end
                 end
             end
         end
@@ -137,7 +217,7 @@ local function LoadValidSpellChoices(player, maxLevel)
         for i = 1, #bucket do
             local id = bucket[i]
             if not knownSpellIds[id] then
-                table.insert(spellChoices, id)
+                table.insert(pool, id)
                 added = added + 1
                 if added >= target then break end
             end
@@ -152,14 +232,14 @@ local function LoadValidSpellChoices(player, maxLevel)
             bucket[i], bucket[j] = bucket[j], bucket[i]
         end
         for _, id in ipairs(bucket) do
-            if #spellChoices >= POOL_AMOUNT then break end
-            table.insert(spellChoices, id)
+            if #pool >= POOL_AMOUNT then break end
+            table.insert(pool, id)
         end
     end
 
     local draftedRarityCount = { [0]=0, [1]=0, [2]=0, [3]=0, [4]=0, [5]=0 }
 
-    for _, spellId in ipairs(spellChoices) do
+    for _, spellId in ipairs(pool) do
         local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. spellId)
         local rarity = (q and not q:IsNull(0)) and q:GetUInt8(0) or 0
         draftedRarityCount[rarity] = (draftedRarityCount[rarity] or 0) + 1
@@ -298,25 +378,7 @@ end
 
 
 
--- Utility: shuffle and select N random spells
-local function GetRandomSpells(num)
-    local shuffled = {}
-    for _, spell in ipairs(spellChoices) do
-        table.insert(shuffled, spell)
-    end
-    for i = #shuffled, 2, -1 do
-        local j = math.random(i)
-        shuffled[i], shuffled[j] = shuffled[j], shuffled[i]
-    end
-    local selected = {}
-    for i = 1, num do
-        table.insert(selected, shuffled[i])
-    end
-    return selected
-end
 
--- Store current choices per player
-local spellChoicesPerPlayer = {}
 
 -- Event: Player level-up
 local function OnLevelUp(event, player, oldLevel)
@@ -370,8 +432,8 @@ local function OnLevelUp(event, player, oldLevel)
         ValidSpellChoices = {}
         LoadValidSpellChoices(player, player:GetLevel())
 
-        local spells = GetRandomSpells(3)
-        spellChoicesPerPlayer[guid] = spells
+        local spells = GetRandomSpells(3, guid)
+        currentDraftChoices[guid] = spells
         SaveSpellsToDB(guid, spells)
 
         local data = table.concat(spells, ",")
@@ -387,7 +449,7 @@ local function OnLevelUp(event, player, oldLevel)
     else
         --print("[DEBUG] Player already has pending draft. Resending existing spells.")
 
-        spellChoicesPerPlayer[guid] = existing
+        currentDraftChoices[guid] = existing
         local data = table.concat(existing, ",")
         --player:SendBroadcastMessage("[DEBUG] Resending existing spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
@@ -419,6 +481,11 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
             
             local playerGuid = player:GetGUIDLow()
             local query = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. playerGuid)
+            local bansQ = CharDBQuery("SELECT bans FROM prestige_stats WHERE player_id = " .. guid)
+            if bansQ then
+              local bansRemaining = bansQ:GetUInt32(0)
+              player:SendAddonMessage("SpellChoiceBansLeft", tostring(bansRemaining), 0, player)
+            end
             if query then
                 local totalExpected = query:GetUInt32(0)
                 local successful = query:GetUInt32(1)
@@ -431,6 +498,81 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
             -- NEW: Send reroll count too
             player:SendAddonMessage("SpellChoiceRerolls", tostring(rerolls), 0, player)
         end
+        return false
+    end
+    if msg == "SC_REPLACE_BANNED" then
+        local guid = player:GetGUIDLow()
+        local current = LoadSpellsFromDB(guid)
+        local replaced = false
+        local bansQ = CharDBQuery("SELECT bans FROM prestige_stats WHERE player_id = " .. guid)
+        if bansQ then
+          local bansRemaining = bansQ:GetUInt32(0)
+          player:SendAddonMessage("SpellChoiceBansLeft", tostring(bansRemaining), 0, player)
+        end
+        if current then
+        LoadValidSpellChoices(player, player:GetLevel())
+
+        local newChoices = {}
+        local excludeSet = {}
+        local bannedIDs = {}
+
+        -- Phase 1: Collect all unbanned spells first
+        for _, id in ipairs(current) do
+            local isBanned = CharDBQuery("SELECT 1 FROM draft_bans WHERE player_id = " .. guid .. " AND spell_id = " .. id)
+            if isBanned then
+                table.insert(bannedIDs, id)
+            else
+                table.insert(newChoices, id)
+                excludeSet[id] = true
+            end
+        end
+
+        -- Optional: fetch all banned spells into a set for safety check
+        local bannedSet = {}
+        local banQ = CharDBQuery("SELECT spell_id FROM draft_bans WHERE player_id = " .. guid)
+        if banQ then
+            repeat
+                bannedSet[banQ:GetUInt32(0)] = true
+            until not banQ:NextRow()
+        end
+
+        local replaced = false
+
+        -- Phase 2: Replace each banned spell
+        for _, _ in ipairs(bannedIDs) do
+            local newList = GetRandomSpells(1, guid, excludeSet)
+            local new = newList and newList[1]
+            if new and not bannedSet[new] then
+                table.insert(newChoices, new)
+                excludeSet[new] = true
+                replaced = true
+            else
+                --print("[SpellChoice] Failed to find replacement spell for banned ID (duplicate or banned)")
+            end
+        end
+
+
+            currentDraftChoices[guid] = newChoices
+            SaveSpellsToDB(guid, newChoices)
+
+            local data = table.concat(newChoices, ",")
+            player:SendAddonMessage("SpellChoice", data, 0, player)
+
+            local rarityParts = {}
+            for _, id in ipairs(newChoices) do
+                local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
+                table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+            end
+            player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
+
+            if replaced then
+                --print("[SpellChoice] Replaced banned spells for player " .. player:GetName() .. ": " .. data)
+            else
+                --print("[SpellChoice] SC_REPLACE_BANNED called but no changes needed.")
+            end
+
+        end
+
         return false
     end
 
@@ -458,8 +600,8 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         -- Reduce reroll count and update
         CharDBExecute("UPDATE prestige_stats SET rerolls = rerolls - 1 WHERE player_id = " .. guid)
 
-        local spells = GetRandomSpells(3)
-        spellChoicesPerPlayer[guid] = spells
+        local spells = GetRandomSpells(3, guid)
+        currentDraftChoices[guid] = spells
         SaveSpellsToDB(guid, spells)
         local data = table.concat(spells, ",")
         --print("[SpellChoice] Rerolled spell choices for " .. player:GetName() .. ": " .. data)
@@ -475,8 +617,62 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
         return false
     end
+    -- Handle SC:<spellId>-- Handle SC_BAN:<spellId>
+    local banSpellId = tonumber(msg:match("^SC_BAN:(%d+)$"))
+    if banSpellId then
+        local bansQ = CharDBQuery("SELECT bans FROM prestige_stats WHERE player_id = " .. guid)
+        if not bansQ then return false end
 
-    -- Handle SC:<spellId>
+        local bansLeft = bansQ:GetUInt32(0)
+
+        if bansLeft <= 0 then
+            player:SendAddonMessage("SpellChoiceBanDenied", "0", 0, player)
+            --print("[SpellChoice] Ban denied — no bans left for player " .. player:GetName())
+            return false
+        end
+
+        -- Subtract ban, insert ban into DB
+        CharDBExecute("UPDATE prestige_stats SET bans = bans - 1 WHERE player_id = " .. guid)
+        CharDBExecute("INSERT IGNORE INTO draft_bans (player_id, spell_id) VALUES (" .. guid .. ", " .. banSpellId .. ")")
+
+        -- Remove from global pool
+        local removed = false
+        for i = #(fullSpellPools[guid] or {}), 1, -1 do
+            if fullSpellPools[guid][i] == banSpellId then
+                table.remove(fullSpellPools[guid], i)
+                removed = true
+                break
+            end
+        end
+
+        -- Also remove from player's 3 draft picks (if they match)
+        if currentDraftChoices[guid] then
+            for i = #currentDraftChoices[guid], 1, -1 do
+                if currentDraftChoices[guid][i] == banSpellId then
+                    table.remove(currentDraftChoices[guid], i)
+                    --print("[SpellChoice] [Ban] Removed banned spell from player's active draft list")
+                    break
+                end
+            end
+        end
+
+        player:SendAddonMessage("SpellChoiceBanAccepted", tostring(banSpellId), 0, player)
+        local updated = CharDBQuery("SELECT bans FROM prestige_stats WHERE player_id = " .. guid)
+        if updated then
+          local left = updated:GetUInt32(0)
+          player:SendAddonMessage("SpellChoiceBansLeft", tostring(left), 0, player)
+        end
+        print(string.format("[SpellChoice] Player %s banned spell ID %d (bans left: %d) %s",
+            player:GetName(),
+            banSpellId,
+            bansLeft - 1,
+            removed and "[REMOVED FROM POOL]" or "[NOT IN POOL]"
+        ))
+
+        return false
+    end
+
+
     local spellId = tonumber(msg:match("^SC:(%d+)$"))
     if not spellId then return end
 
@@ -497,8 +693,8 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
     if player:HasSpell(spellId) then
         player:SendBroadcastMessage("You already know that spell. Rerolling...")
 
-        local spells = GetRandomSpells(3)
-        spellChoicesPerPlayer[guid] = spells
+        local spells = GetRandomSpells(3, guid)
+        currentDraftChoices[guid] = spells
         local data = table.concat(spells, ",")
         --print("[SpellChoice] Auto-reroll (duplicate spell) for " .. player:GetName() .. ": " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
@@ -511,7 +707,7 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         return false
     end
 
-    local validChoices = spellChoicesPerPlayer[guid]
+    local validChoices = currentDraftChoices[guid]
     if not validChoices or not tableContains(validChoices, spellId) then
         player:SendBroadcastMessage("Invalid spell selection.")
         return false
@@ -547,9 +743,9 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
         end
     end
     draftingPlayers[guid] = nil
-    for i = #spellChoices, 1, -1 do
-        if spellChoices[i] == spellId then
-            table.remove(spellChoices, i)
+    for i = #(fullSpellPools[guid] or {}), 1, -1 do
+        if fullSpellPools[guid][i] == spellId then
+            table.remove(fullSpellPools[guid], i)
             break
         end
     end
@@ -561,7 +757,7 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
     CharDBExecute("INSERT IGNORE INTO drafted_spells (player_guid, spell_id) VALUES (" .. guid .. ", " .. spellId .. ")")
     UpgradeKnownSpells(player)
 
-    spellChoicesPerPlayer[guid] = nil
+    currentDraftChoices[guid] = nil
     player:SendAddonMessage("SpellChoiceClose", "", 0, player)
     -- Fresh query and send updated draft count again
     local check = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. guid)
@@ -580,8 +776,8 @@ local function OnAddonWhisper(event, player, msg, msgType, lang, receiver)
 
         if successful < expected then
             LoadValidSpellChoices(player, player:GetLevel())
-            local spells = GetRandomSpells(3)
-            spellChoicesPerPlayer[guid] = spells
+            local spells = GetRandomSpells(3, guid)
+            currentDraftChoices[guid] = spells
             SaveSpellsToDB(guid, spells) 
             local data = table.concat(spells, ",")
             --print("[SpellChoice] Follow-up draft for " .. player:GetName() .. ": " .. data)
@@ -626,7 +822,7 @@ local function BeginDraftLoop(player, guid, rerolls, successful, expected)
         spells = GetRandomSpells(3)
         SaveSpellsToDB(guid, spells)
     end
-    spellChoicesPerPlayer[guid] = spells
+    currentDraftChoices[guid] = spells
     SaveSpellsToDB(guid, spells) 
     local data = table.concat(spells, ",")
     --print("[DEBUG] (Login) Pending draft for " .. player:GetName() .. ": " .. data)
@@ -686,14 +882,27 @@ local function OnLogin(event, player)
     if draft >= 1 then
 
         --Ensure spell list is loaded
-        if not spellChoices or #spellChoices == 0 then
+        if not fullSpellPools[guid] or #fullSpellPools[guid] == 0 then
             LoadValidSpellChoices(player, player:GetLevel())-- or 80 if you want full list
         end
 
         -- Start draft loop
         BeginDraftLoop(player, guid, rerolls, successful, expected)
     else
+    -- Send current bans
+    local bansQ = CharDBQuery("SELECT spell_id FROM draft_bans WHERE player_id = " .. guid)
+    if bansQ then
+        local banned = {}
+        repeat
+            table.insert(banned, bansQ:GetUInt32(0))
+        until not bansQ:NextRow()
 
+        if #banned > 0 then
+            local data = table.concat(banned, ",")
+            player:SendAddonMessage("SpellChoiceBans", data, 0, player)
+            --print("[SpellChoice] Sent banned spells to " .. player:GetName() .. ": " .. data)
+        end
+    end
     local playerGuid = player:GetGUIDLow()
     local query = CharDBQuery("SELECT total_expected_drafts, successful_drafts FROM prestige_stats WHERE player_id = " .. playerGuid)
     if query then
@@ -713,7 +922,7 @@ local lastZoneDraft = {}
 
 local function OnZoneChanged(event, player, newZone, newArea)
     local guid = player:GetGUIDLow()
-    if spellChoicesPerPlayer[guid] and #spellChoicesPerPlayer[guid] == 3 then
+    if currentDraftChoices[guid] and #currentDraftChoices[guid] == 3 then
       return
     end
     local now = os.time()
@@ -742,18 +951,18 @@ local function OnZoneChanged(event, player, newZone, newArea)
             local p = GetPlayerByGUID(guid)
             if not p or not p:IsInWorld() then return end
 
-            if not spellChoices or not spellChoicesPerPlayer[guid] then
+            if not spellChoices or not currentDraftChoices[guid] then
                 LoadValidSpellChoices(p, p:GetLevel())
             end
 
-            local spells = spellChoicesPerPlayer[guid]
+            local spells = currentDraftChoices[guid]
             if not spells or #spells ~= 3 then
                 spells = LoadSpellsFromDB(guid)
                 if not spells or spells[1] == 0 then
                     spells = GetRandomSpells(3)
                     SaveSpellsToDB(guid, spells)
                 end
-                spellChoicesPerPlayer[guid] = spells
+                currentDraftChoices[guid] = spells
                 SaveSpellsToDB(guid, spells)
             end
 

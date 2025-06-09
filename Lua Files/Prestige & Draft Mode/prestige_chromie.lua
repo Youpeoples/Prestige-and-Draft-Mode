@@ -3,11 +3,20 @@ local NPC_ID = CONFIG.NPC_ID
 local MAX_LEVEL = CONFIG.MAX_LEVEL
 local DRAFT_MODE_REROLLS = CONFIG.DRAFT_MODE_REROLLS 
 local DRAFT_MODE_SPELLS = CONFIG.DRAFT_MODE_SPELLS
+local DRAFT_BANS_START = CONFIG.DRAFT_BANS_START
 local DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL = CONFIG.DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL
 local prestigeDescription = CONFIG.prestigeDescription
-
 local prestigeBlockedMessage = CONFIG.prestigeBlockedMessage
 local prestigeLossList = CONFIG.prestigeLossList
+local CHROMIE_SAYINGS = {
+    "Didn't expect to see you so soon, $n.",
+    "Ah, $n... back already? Time is strange like that.",
+    "I had a feeling you'd be looping back around.",
+    "You again, $n? That was quicker than last time.",
+    "Back again, $n? I must’ve blinked.",
+    "You're becoming quite the regular, $n."
+}
+
 local LOGOUT_TIMER = 10 -- time in seconds to wait after sending back to start before logging out to finish process.
 local LOGOUT_AFTER_PRESTIGE_TIMER = LOGOUT_TIMER * 1000
 local EQUIP_SLOT_START = 0
@@ -185,11 +194,20 @@ local function ShowPrestigeOptions(player, creature)
         player:GossipMenuAddItem(4, GetLossListText(), 1, 998)
         player:GossipMenuAddItem(9, RED .. "Prestige", 1, 3)
         player:GossipMenuAddItem(9, RED .. "Prestige into Draft Mode", 1, 4)
+        --player:GossipMenuAddItem(9, RED .. "Prestige into Taskmaster Mode", 1, 6)
     end
     player:GossipMenuAddItem(0, "Back", 1, 0)
     player:GossipSendMenu(1, creature)
 end
-
+local function ShowTaskmasterConfirmation(player, creature)
+    player:GossipClearMenu()
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Bag_10:20|t Prestige requires 10 free inventory slots", 1, 998)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\Ability_Hunter_BeastCall:20|t Prestige requires no active pet. Dismiss your pet if you have one", 1, 998)
+    player:GossipMenuAddItem(0, "", 1, 998)
+    --player:GossipMenuAddItem(9, RED .. "I am sure I want to Prestige into Taskmaster Mode!", 1, 103)
+    player:GossipMenuAddItem(0, "Back", 1, 2)
+    player:GossipSendMenu(1, creature)
+end
 local function ShowConfirmation(player, creature)
     player:GossipClearMenu()
     player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Bag_10:20|t Prestige requires 10 free inventory slots", 1, 998)
@@ -240,7 +258,7 @@ local function DeleteAllPlayerPets(playerGUID)
 end
 
 
-local function DoPrestige(player, draftMode)
+local function DoPrestige(player, draftMode, isTaskmaster)
     local guid = player:GetGUIDLow()
     local requiredSlots = 10
     local freeSlots = 0
@@ -355,11 +373,12 @@ local function DoPrestige(player, draftMode)
                 total_expected_drafts = %d,
                 rerolls = %d,
                 stored_class = %d,
+                bans = %d,
                 offered_spell_1 = 0,
                 offered_spell_2 = 0,
                 offered_spell_3 = 0
             WHERE player_id = %d
-        ]], DRAFT_MODE_SPELLS, bonusRerolls, storedClass, guid)
+        ]], DRAFT_MODE_SPELLS, bonusRerolls, storedClass, DRAFT_BANS_START, guid)
 
         CharDBExecute(updateStatsQuery)
         --print("[DraftMode] Updated prestige_stats for " .. guid .. " with " .. bonusRerolls .. " rerolls")
@@ -397,6 +416,7 @@ local function DoPrestige(player, draftMode)
     -- end
     CharDBExecute("DELETE FROM drafted_spells WHERE player_guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus WHERE guid = " .. guid)
+    CharDBExecute("DELETE FROM draft_bans WHERE player_id = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_rewarded WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_daily WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_weekly WHERE guid = " .. guid)
@@ -423,14 +443,25 @@ local function DoPrestige(player, draftMode)
         }
 
         local dkStart = {map = 609, x = 2352.47, y = -5665.831, z = 426.02786, o = 1.44}
-        local loc = (plr:GetClass() == 6) and dkStart or raceStartLocations[plr:GetRace()]
+        local loc
+        if isTaskmaster then
+            CharDBExecute("UPDATE prestige_stats SET taskmaster_state = 1 WHERE player_id = " .. guid)
+        end
+        if isTaskmaster then
+            loc = {map = 0, x = -4818.3784, y = -973.5159, z = 464.709, o = 3.8585422} -- your custom Taskmaster hub
+        else
+            loc = (plr:GetClass() == 6) and dkStart or raceStartLocations[plr:GetRace()]
+        end
 
         if loc then
             plr:Teleport(loc.map, loc.x, loc.y, loc.z, loc.o)
         else
             plr:SendBroadcastMessage("Unknown race/class start location.")
         end
-
+        if isTaskmaster then
+            plr:SetBindPoint(loc.x, loc.y, loc.z, loc.map, 0)  
+            plr:SendBroadcastMessage("Your hearthstone has been bound to the Taskmaster Hub.")
+        end
         -- Always schedule delayed logout if not drafting
         if not draftMode then
             CreateLuaEvent(function()
@@ -492,8 +523,7 @@ local function DoDraftEnd(player)
     -- Clean up data
     CharDBExecute("DELETE FROM character_action WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_spell WHERE guid = " .. guid)
-
-
+    CharDBExecute("DELETE FROM draft_bans WHERE player_id = " .. guid)
     CharDBExecute("DELETE FROM drafted_spells WHERE player_guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus WHERE guid = " .. guid)
     CharDBExecute("DELETE FROM character_queststatus_rewarded WHERE guid = " .. guid)
@@ -576,18 +606,64 @@ local function OnGossipSelect(event, player, creature, sender, intid)
                 return
             end
         end
-    DoPrestige(player, false)
+      DoPrestige(player, false, false)
     elseif intid == 101 then
         if HasActivePetBlockPrestige(player) then return end
-        DoPrestige(player, true)  -- draft mode prestige
+        DoPrestige(player, true, false)
     elseif intid == 200 then
         ShowEndDraftConfirmation(player, creature) 
     elseif intid == 201 then
         if HasActivePetBlockPrestige(player) then return end
         DoDraftEnd(player) 
+    elseif intid == 6 then
+        ShowTaskmasterConfirmation(player, creature)
+    elseif intid == 103 then
+        if HasActivePetBlockPrestige(player) then return end
+        DoPrestige(player, false, true)  -- false = not draft, true = taskmaster
     end
 end
 
 RegisterCreatureGossipEvent(NPC_ID, 1, OnGossipHello)
 RegisterCreatureGossipEvent(NPC_ID, 2, OnGossipSelect)
 
+-- Setup for seen players table
+local seen_players = {}
+
+-- Reset seen_players every 2 minutes
+CreateLuaEvent(function()
+    seen_players = {}
+end, 120000, 0)
+
+-- Distance in yards
+local DETECTION_RADIUS = 10
+
+-- Periodic check for nearby players with taskmaster_state = 1
+local function CheckNearbyPlayers(_, _, _, creature)
+    if not creature or not creature:IsInWorld() then return end
+    local players = creature:GetPlayersInRange(DETECTION_RADIUS)
+    if not players or #players == 0 then return end
+
+    for _, player in ipairs(players) do
+        if player:IsPlayer() then
+            local guid = player:GetGUIDLow()
+
+            if not seen_players[guid] then
+                local query = CharDBQuery("SELECT taskmaster_state FROM prestige_stats WHERE player_id = " .. guid)
+                if query and query:GetUInt8(0) == 1 then
+                    local line = CHROMIE_SAYINGS[math.random(1, #CHROMIE_SAYINGS)]
+                    line = string.gsub(line, "$n", player:GetName())
+                    creature:SendUnitSay(line, 0)
+                    seen_players[guid] = true
+                end
+            end
+        end
+    end
+end
+
+-- When Chromie spawns, start scanning
+local function OnChromieSpawn(event, creature)
+    creature:RegisterEvent(CheckNearbyPlayers, 3000, 0) -- every 3 seconds
+end
+
+-- Hook to Chromie's NPC ID
+RegisterCreatureEvent(NPC_ID, 5, OnChromieSpawn)  -- ON_SPAWN

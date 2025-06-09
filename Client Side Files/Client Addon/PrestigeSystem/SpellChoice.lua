@@ -13,6 +13,8 @@ local lastChoiceTime = 0
 local lastChoiceHash = ""
 local lastSpellIDs = {}
 local dismissToggled = false
+local restoringFromDismiss = false
+local bannedSpells = {}
 local currentSpellRarities = {}
 tooltip:SetOwner(UIParent, "ANCHOR_NONE")
 GameTooltip:SetOwner(UIParent, "ANCHOR_NONE")
@@ -21,9 +23,13 @@ GameTooltip:SetFrameLevel(100)
 GameTooltip:SetClampedToScreen(true)
 -- Filter out SC:123 whispers from showing in chat
 local function SpellChoiceWhisperFilter(_, _, msg)
-  if msg:match("^SC:%d+$") then return true end
+  if msg:match("^SC:%d+$") or msg:match("^SC_BAN:%d+$") then
+    return true
+  end
 end
+local bansLeft = 0
 local rerollsLeft = 0
+local banMode = false
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER", SpellChoiceWhisperFilter)         -- incoming
 ChatFrame_AddMessageEventFilter("CHAT_MSG_WHISPER_INFORM", SpellChoiceWhisperFilter) -- outgoing
 
@@ -128,7 +134,24 @@ local function ShowSpellChoices(spellIDs)
         local cacheTooltip = CreateFrame("GameTooltip", "CacheTooltip", UIParent, "GameTooltipTemplate")
         cacheTooltip:SetOwner(UIParent, "ANCHOR_NONE")
         cacheTooltip:SetHyperlink("spell:" .. spellID)
-        btn:SetID(spellID)
+        
+      btn:SetID(spellID)
+      btn:SetNormalTexture("Interface\\Icons\\" .. icon)
+      btn.icon:SetTexture(icon)
+      btn.name:SetText(name)
+
+      if bannedSpells[spellID] then
+        btn:SetAlpha(0.3)
+        btn:Disable()
+        btn:EnableMouse(false)
+        Debug("[Ban] Auto-disabled banned spell ID: " .. spellID)
+      else
+        btn:SetAlpha(1)
+        btn:Enable()
+        btn:EnableMouse(true)
+      end
+
+
         btn.icon:SetTexture(icon)
         btn.name:SetText(name)
         local rarityFrame = _G[btn:GetName() .. "Rarity"]
@@ -158,24 +181,31 @@ local function ShowSpellChoices(spellIDs)
 
         --btn.description:SetText(table.concat(descriptionLines, "\n"))
         --btn.levelReq:SetText("Required level: 1")
+        if not restoringFromDismiss then
         btn:SetScale(0.8)
         btn:SetAlpha(0)
         UIFrameFadeIn(btn, 0.6, 0, 1)
 
-      local t = 0
-      local pulseSpeed = 10  -- Adjust for faster or slower animation
-      local pulseDuration = (2 * math.pi) / pulseSpeed  -- One full pulse (0 -> up -> down -> 0)
+        -- Pulse animation
+        local t = 0
+        local pulseSpeed = 10
+        local pulseDuration = (2 * math.pi) / pulseSpeed
 
-      btn:SetScript("OnUpdate", function(self, elapsed)
+        btn:SetScript("OnUpdate", function(self, elapsed)
           t = t + elapsed
           if t >= pulseDuration then
-              self:SetScript("OnUpdate", nil)
-              self:SetScale(1) -- Reset to natural size
+            self:SetScript("OnUpdate", nil)
+            self:SetScale(1)
           else
-              local scale = 1 + 0.05 * math.sin(t * pulseSpeed)
-              self:SetScale(scale)
+            local scale = 1 + 0.05 * math.sin(t * pulseSpeed)
+            self:SetScale(scale)
           end
-      end)
+        end)
+      else
+        btn:SetScale(1)
+        btn:SetAlpha(1)
+        btn:SetScript("OnUpdate", nil)
+      end
         btn:EnableMouse(true)
         btn:Show()
       else
@@ -226,6 +256,39 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
         Debug("SpellChoice locked (not prestiged).")
       end
 
+    elseif prefix == "SpellChoiceBansLeft" then
+      bansLeft = tonumber(message) or 0
+      if SpellChoiceBanButton then
+        SpellChoiceBanButton:SetText(banMode and ("Ban [ON] (" .. bansLeft .. ")") or ("Ban (" .. bansLeft .. ")"))
+      end
+  elseif prefix == "SpellChoiceBans" then
+    bannedSpells = {}
+    for id in string.gmatch(message, "%d+") do
+      bannedSpells[tonumber(id)] = true
+    end
+    Debug("Loaded " .. tostring(table.getn(message)) .. " banned spells from server.")   
+  elseif prefix == "SpellChoiceBanAccepted" then
+    local bannedID = tonumber(message)
+    for _, btn in ipairs(buttons) do
+      if btn:GetID() == bannedID then
+        btn:SetAlpha(0.3)
+        btn:Disable()
+        Debug("[Ban] Server confirmed ban of spell ID " .. bannedID)
+      end
+    end
+
+    -- Immediately refresh with new spell if needed
+    local target = UnitName("player")
+    if target then
+      Delay(0.3, function()
+        SendChatMessage("SC_REPLACE_BANNED", "WHISPER", nil, target)
+      end)      
+      Debug("[Ban] Immediately requested replacement for banned spell ID: " .. bannedID)
+    end
+
+  elseif prefix == "SpellChoiceBanDenied" then
+      UIErrorsFrame:AddMessage("No bans remaining.", 1.0, 0.2, 0.2, 1)
+      Debug("[Ban] Ban denied: no bans left")
     elseif prefix == "SpellChoice" then
       Debug("Received SpellChoice message: " .. message)
 
@@ -316,35 +379,37 @@ for _, btn in ipairs(buttons) do
     end
   end)
 
-  btn:SetScript("OnLeave", function(self)
-    GameTooltip:Hide()
-  end)
 btn:SetScript("OnClick", function(self)
-    PlaySound("igMainMenuOptionCheckBoxOn")
-    local spellID = self:GetID()
-    if spellID and spellID > 0 then
-        local target = UnitName("player")
-        if target then
-            -- Fade out the other two buttons
-            for _, otherBtn in ipairs(buttons) do
-                if otherBtn ~= self then
-                    UIFrameFadeOut(otherBtn, 0.3, 1, 0)
-                    otherBtn:EnableMouse(false)
-                end
-            end
+  local spellID = self:GetID()
+  if not spellID or spellID <= 0 then return end
 
-            -- Prevent multiple clicks
-            self:EnableMouse(false)
+  -- If the spell is banned, do nothing
+  if bannedSpells[spellID] then
+    Debug("[Ban] Blocked click on banned spell ID: " .. spellID)
+    return
+  end
 
-            -- Delay to let the fade animation play before sending
-            Delay(0.35, function()
-                SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
-            end)
-        else
-            print("SpellChoice: Failed to send SC message — player name is nil.")
-        end
+  PlaySound("igMainMenuOptionCheckBoxOn")
+
+  if banMode then
+    local target = UnitName("player")
+    if target then
+      SendChatMessage("SC_BAN:" .. spellID, "WHISPER", nil, target)
+      Debug("[Ban] Attempting to ban spell ID: " .. spellID)
+    else
+      print("SpellChoice: Failed to send SC_BAN message — player name is nil.")
     end
+    return
+  end
+
+  local target = UnitName("player")
+  if target then
+    SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+  else
+    print("SpellChoice: Failed to send SC message — player name is nil.")
+  end
 end)
+
 
 
 
@@ -376,15 +441,58 @@ SpellChoiceRerollButton:SetScript("OnClick", function()
     print("SpellChoice: Failed to send SC_REROLL — player name is nil.")
   end
 end)
+SpellChoiceBanButton = CreateFrame("Button", "SpellChoiceBanButton", SpellChoiceFrame, "UIPanelButtonTemplate")
+SpellChoiceBanButton:SetSize(100, 22)
+SpellChoiceBanButton:SetText("Ban")
+SpellChoiceBanButton:SetPoint("LEFT", SpellChoiceRerollButton, "RIGHT", 10, 0)
+SpellChoiceBanButton:SetScript("OnClick", function(self)
+  PlaySound("igMainMenuOptionCheckBoxOn")
+  banMode = not banMode
 
+  -- Toggle appearance
+  if banMode then
+    self:SetText("Ban [ON] (" .. bansLeft .. ")")
+    SpellChoiceRerollButton:Disable()
+    UIErrorsFrame:AddMessage("Ban Mode Activated", 1.0, 0.5, 0.0, 1)
+    Debug("[Ban] Mode activated")
+  else
+    self:SetText("Ban (" .. bansLeft .. ")")
+    SpellChoiceRerollButton:Enable()
+    Debug("[Ban] Mode deactivated")
+
+    -- Check if any shown spell is banned
+    local found = false
+    for _, btn in ipairs(buttons) do
+      local id = btn:GetID()
+      if bannedSpells[id] then
+        found = true
+        Debug("[Ban] Detected banned spell in current draft: " .. id)
+        break
+      end
+    end
+
+    -- If so, request replacements for just banned ones
+    if found then
+      local target = UnitName("player")
+      if target then
+        SendChatMessage("SC_REPLACE_BANNED", "WHISPER", nil, target)
+        Debug("[Ban] Requesting replacement for banned spells...")
+        SendChatMessage("SC_CHECK", "WHISPER", nil, target)  -- Refresh bans too
+        Debug("[Ban] Also re-requesting ban list to clear replaced spell")
+      end
+    end
+  end
+end)
+SpellChoiceBanButton:Show()
 SpellChoiceDismissButton:SetScript("OnClick", function(self)
     PlaySound("igMainMenuOptionCheckBoxOn")
     dismissToggled = not dismissToggled
+
     if dismissToggled then
-        -- Hide all UI, show small dismiss button at center
         local label = SpellChoiceTitle:GetText() or ""
         local count = label:match("(%d+)") or "0"
         self:SetText(count .. " Draft(s) Left")
+
         for _, btn in ipairs(buttons) do
             btn:Hide()
             btn:EnableMouse(false)
@@ -392,32 +500,56 @@ SpellChoiceDismissButton:SetScript("OnClick", function(self)
             btn:SetScript("OnLeave", nil)
             btn:SetScript("OnClick", nil)
         end
+
         SpellChoiceTitle:Hide()
         SpellChoiceRerollButton:Hide()
         SpellChoiceFrame:EnableMouse(false)
         SpellChoiceFrame:SetAlpha(0.01)
-        -- Reparent dismiss to UIParent for central display
+
         self:SetParent(UIParent)
         self:ClearAllPoints()
         self:SetPoint("CENTER", UIParent, "CENTER", 0, -300)
         self:SetFrameStrata("FULLSCREEN_DIALOG")
         self:EnableMouse(true)
         self:Show()
+
+        -- Reset ban state when hidden
+        banMode = false
+        SpellChoiceBanButton:SetText("Ban")
+        SpellChoiceRerollButton:Enable()
+        Debug("[Ban] Ban mode reset due to dismissal")
     else
-        -- Toggle back on: fully restore UI
         self:SetText("Dismiss")
+
+        -- Reset ban mode just in case
+        banMode = false
+        SpellChoiceBanButton:SetText("Ban")
+        SpellChoiceRerollButton:Enable()
+        Debug("[Ban] Ban mode reset on re-toggle")
+
+        -- Restore full UI state
         if lastSpellIDs and #lastSpellIDs > 0 then
-            ShowSpellChoices(lastSpellIDs)
+        local target = UnitName("player")
+        if target then
+          SendChatMessage("SC_CHECK", "WHISPER", nil, target)
+          Debug("[Ban] Re-requested banned spell list before restoring UI.")
         end
-        -- Ensure frame and buttons are visible and interactive again
+
+        restoringFromDismiss = true
+        Delay(0.2, function()
+          ShowSpellChoices(lastSpellIDs)
+          restoringFromDismiss = false
+        end)
+      end
+
         SpellChoiceFrame:EnableMouse(true)
         SpellChoiceFrame:SetAlpha(1)
         SpellChoiceFrame:Show()
+
         for _, btn in ipairs(buttons) do
             btn:EnableMouse(true)
             btn:Show()
-            btn:EnableMouse(true)
-            -- Reattach hover (tooltip) handler
+
             btn:SetScript("OnEnter", function(self)
                 local spellID = self:GetID()
                 if spellID and spellID > 0 then
@@ -426,32 +558,45 @@ SpellChoiceDismissButton:SetScript("OnClick", function(self)
                     GameTooltip:Show()
                 end
             end)
-            -- Reattach mouse-leave handler
+
             btn:SetScript("OnLeave", function(self)
                 GameTooltip:Hide()
             end)
-            -- Reattach click handler to send the SC:<spellID> whisper
+
             btn:SetScript("OnClick", function(self)
-    PlaySound("igMainMenuOptionCheckBoxOn")
-    local spellID = self:GetID()
-                if spellID and spellID > 0 then
+                PlaySound("igMainMenuOptionCheckBoxOn")
+                local spellID = self:GetID()
+                if not spellID or spellID <= 0 then return end
+
+                if banMode then
                     local target = UnitName("player")
                     if target then
-                        SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+                        SendChatMessage("SC_BAN:" .. spellID, "WHISPER", nil, target)
+                        Debug("[Ban] Attempting to ban spell ID: " .. spellID)
                     else
-                        print("SpellChoice: Failed to send SC message — player name is nil.")
+                        print("SpellChoice: Failed to send SC_BAN message — player name is nil.")
                     end
+                    return
+                end
+
+                local target = UnitName("player")
+                if target then
+                    SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+                else
+                    print("SpellChoice: Failed to send SC message — player name is nil.")
                 end
             end)
         end
+
         SpellChoiceTitle:Show()
         SpellChoiceRerollButton:Show()
-        -- Restore dismiss button to original parent/position
+
         self:SetParent(SpellChoiceFrame)
         self:ClearAllPoints()
         self:SetPoint("BOTTOM", SpellChoiceTitle, "TOP", 0, -290)
     end
 end)
+
 
 
 local flash = SpellChoiceFrame:CreateTexture(nil, "OVERLAY")
