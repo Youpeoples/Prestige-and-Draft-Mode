@@ -194,9 +194,13 @@ Edit this file before deployment to match your server’s design.
 
 **A:** You must be max level(configurable), have at least 10 free inventory slots, and have no active pet.
 
-### Q: Is this AddOn compatible with other systems?
+### Q: Is this Mod compatible with other systems?
 
 **A:** The system is self-contained and should not interfere with existing character progression or other custom modules unless they conflict with player class or spell learning behavior.
+
+### Q:I have replaced files in an attempt to update and now I'm getting database errors. What do I do?
+
+**A:** This Mod is a work in progress and continues to evolve. Always check the included prestige.sql file for any update queries required to keep your database schema in sync with the latest version.
 
 ### Q: I don't want to use this mod anymore, how do i get rid of it?
 
