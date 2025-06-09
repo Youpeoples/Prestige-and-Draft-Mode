@@ -1,7 +1,8 @@
 # Prestige & Draft Mode
-![image](https://github.com/user-attachments/assets/c5a5d4a3-56b7-4887-8eed-2a2e8da7e07f)
-
 **Wrath of the Lich King (3.3.5a)**
+
+![image](https://github.com/user-attachments/assets/5d3ed4b4-0765-4238-902e-cf2ad82fd8d0)
+
 
 A minimally invasive prestige system that lets characters reset back to level one in exchange for unique rewards and progression options. It features both a classic prestige reset and an optional Draft Mode, where players select a new spell from a randomized pool upon each level-up. 
 
