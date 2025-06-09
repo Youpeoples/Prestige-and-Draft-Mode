@@ -402,13 +402,28 @@ btn:SetScript("OnClick", function(self)
     return
   end
 
+  -- Disable & fade the other buttons
+  for _, otherBtn in ipairs(buttons) do
+    if otherBtn ~= self then
+      otherBtn:EnableMouse(false)
+      UIFrameFadeOut(otherBtn, 0.5, 1, 0.1)
+    else
+      otherBtn:SetScale(1.1)
+      UIFrameFadeOut(otherBtn, 0.5, 1, 1)
+    end
+  end
+
+  -- 🚨 Delay sending choice to allow the fade animation to complete
   local target = UnitName("player")
   if target then
-    SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+    Delay(0.5, function()
+      SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+    end)
   else
     print("SpellChoice: Failed to send SC message — player name is nil.")
   end
 end)
+
 
 
 
