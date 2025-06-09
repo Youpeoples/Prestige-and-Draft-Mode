@@ -198,7 +198,7 @@ Edit this file before deployment to match your server’s design.
 
 **A:** The system is self-contained and should not interfere with existing character progression or other custom modules unless they conflict with player class or spell learning behavior.
 
-### Q:I have replaced files in an attempt to update and now I'm getting database errors. What do I do?
+### Q: I have replaced files in an attempt to update and now I'm getting database errors. What do I do?
 
 **A:** This Mod is a work in progress and continues to evolve. Always check the included prestige.sql file for any update queries required to keep your database schema in sync with the latest version.
 
