@@ -9,6 +9,8 @@ local rarityTextures = {
   "LEGE.tga",  -- Legendary
   "BROK.tga",  -- Broken (joke/trap cards?)
 }
+local lastChoiceTime = 0
+local lastChoiceHash = ""
 local lastSpellIDs = {}
 local dismissToggled = false
 local currentSpellRarities = {}
@@ -226,15 +228,33 @@ eventFrame:SetScript("OnEvent", function(self, event, prefix, message, channel, 
 
     elseif prefix == "SpellChoice" then
       Debug("Received SpellChoice message: " .. message)
+
       local spellIDs = {}
       for id in string.gmatch(message, "%d+") do
         table.insert(spellIDs, tonumber(id))
       end
+
+      -- Compare to last shown list
+      local isDuplicate = #spellIDs == #lastSpellIDs
+      if isDuplicate then
+        for i = 1, #spellIDs do
+          if spellIDs[i] ~= lastSpellIDs[i] then
+            isDuplicate = false
+            break
+          end
+        end
+      end
+
+      if isDuplicate then
+        Debug("Ignored duplicate spellID list.")
+        return
+      end
+
+      -- If we got here, it's a new set
+      lastSpellIDs = spellIDs
       Delay(0.5, function()
-        lastSpellIDs = spellIDs 
         ShowSpellChoices(spellIDs)
       end)
-
     elseif prefix == "SpellChoiceClose" then
       frame:Hide()
 

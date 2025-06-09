@@ -9,7 +9,7 @@ local draftingPlayers = {}
 -- Tracks which spells were just blocked from a trainer, so UpgradeKnownSpells will skip exactly those
 -- indexed like: justBlockedSpells[guid][spellId] = true
 local justBlockedSpells = {}
-
+local lastSpellChoiceSent = {}
 local spellChoicesPerPlayer = {}
 
 local spellChoices = {}
@@ -713,6 +713,14 @@ local lastZoneDraft = {}
 
 local function OnZoneChanged(event, player, newZone, newArea)
     local guid = player:GetGUIDLow()
+    if spellChoicesPerPlayer[guid] and #spellChoicesPerPlayer[guid] == 3 then
+      return
+    end
+    local now = os.time()
+    if lastSpellChoiceSent[guid] and now - lastSpellChoiceSent[guid] < 10 then
+        return
+    end
+    lastSpellChoiceSent[guid] = now
 
     local result = CharDBQuery("SELECT draft_state, successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
     if not result then return end
