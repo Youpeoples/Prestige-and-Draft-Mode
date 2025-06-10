@@ -15,6 +15,8 @@ A minimally invasive prestige system that lets characters reset back to level on
 * **Spell Rarity System:** Player‑usable spells are bucketed into five rarity tiers (Common, Uncommon, Rare, Epic, Legendary), with configurable distribution to ensure balanced and meaningful draft pools.
 * **AutoLearn:** Spells you've drafted automatically scale with your level. Each time you draft a new spell, all previously learned spells are upgraded to their highest rank available for your current level.
 * **Ban System:** Players are given a configurable number of bans at the start of each draft run, allowing them to strategically exclude unwanted spells from appearing in their draft pool.
+* **Minimalist Classic+ UI:** A clean, unobtrusive interface inspired by Classic Wow design. Spell details appear only on hover, preserving immersion while offering modern draft functionality.
+* **Visual Feedback:** Smooth fade-out animations and subtle transitions enhance the drafting experience, providing satisfying, polished feedback when selecting spells. Clean visuals make every choice feel impactful.
 ---
 
 **Client Addon/Patch are NOT required to enjoy your server.**
