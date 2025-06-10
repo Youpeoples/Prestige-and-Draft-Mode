@@ -79,6 +79,47 @@ local function RequestPrestigeStatus()
   end
 end
 
+local function HandleSpellClick(self)
+  local spellID = self:GetID()
+  if not spellID or spellID <= 0 then return end
+
+  if bannedSpells[spellID] then
+    Debug("[Ban] Blocked click on banned spell ID: " .. spellID)
+    return
+  end
+
+  PlaySound("igMainMenuOptionCheckBoxOn")
+
+  if banMode then
+    local target = UnitName("player")
+    if target then
+      SendChatMessage("SC_BAN:" .. spellID, "WHISPER", nil, target)
+      Debug("[Ban] Attempting to ban spell ID: " .. spellID)
+    end
+    return
+  end
+
+  -- 🔥 Selection animation block
+  for _, otherBtn in ipairs(buttons) do
+    if otherBtn ~= self then
+      otherBtn:EnableMouse(false)
+      UIFrameFadeOut(otherBtn, 0.5, 1, 0.1)
+    else
+      otherBtn:SetScale(1.1)
+      UIFrameFadeOut(otherBtn, 0.5, 1, 1)
+    end
+  end
+
+  local target = UnitName("player")
+  if target then
+    Delay(0.5, function()
+      SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
+    end)
+  end
+end
+
+
+
 -- Show spell choices to the player
 local function ShowSpellChoices(spellIDs)
   if dismissToggled then
@@ -379,55 +420,7 @@ for _, btn in ipairs(buttons) do
     end
   end)
 
-btn:SetScript("OnClick", function(self)
-  local spellID = self:GetID()
-  if not spellID or spellID <= 0 then return end
-
-  -- If the spell is banned, do nothing
-  if bannedSpells[spellID] then
-    Debug("[Ban] Blocked click on banned spell ID: " .. spellID)
-    return
-  end
-
-  PlaySound("igMainMenuOptionCheckBoxOn")
-
-  if banMode then
-    local target = UnitName("player")
-    if target then
-      SendChatMessage("SC_BAN:" .. spellID, "WHISPER", nil, target)
-      Debug("[Ban] Attempting to ban spell ID: " .. spellID)
-    else
-      print("SpellChoice: Failed to send SC_BAN message — player name is nil.")
-    end
-    return
-  end
-
-  -- Disable & fade the other buttons
-  for _, otherBtn in ipairs(buttons) do
-    if otherBtn ~= self then
-      otherBtn:EnableMouse(false)
-      UIFrameFadeOut(otherBtn, 0.5, 1, 0.1)
-    else
-      otherBtn:SetScale(1.1)
-      UIFrameFadeOut(otherBtn, 0.5, 1, 1)
-    end
-  end
-
-  -- 🚨 Delay sending choice to allow the fade animation to complete
-  local target = UnitName("player")
-  if target then
-    Delay(0.5, function()
-      SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
-    end)
-  else
-    print("SpellChoice: Failed to send SC message — player name is nil.")
-  end
-end)
-
-
-
-
-
+btn:SetScript("OnClick", HandleSpellClick)
 end
 
 
@@ -578,29 +571,7 @@ SpellChoiceDismissButton:SetScript("OnClick", function(self)
                 GameTooltip:Hide()
             end)
 
-            btn:SetScript("OnClick", function(self)
-                PlaySound("igMainMenuOptionCheckBoxOn")
-                local spellID = self:GetID()
-                if not spellID or spellID <= 0 then return end
-
-                if banMode then
-                    local target = UnitName("player")
-                    if target then
-                        SendChatMessage("SC_BAN:" .. spellID, "WHISPER", nil, target)
-                        Debug("[Ban] Attempting to ban spell ID: " .. spellID)
-                    else
-                        print("SpellChoice: Failed to send SC_BAN message — player name is nil.")
-                    end
-                    return
-                end
-
-                local target = UnitName("player")
-                if target then
-                    SendChatMessage("SC:" .. spellID, "WHISPER", nil, target)
-                else
-                    print("SpellChoice: Failed to send SC message — player name is nil.")
-                end
-            end)
+            btn:SetScript("OnClick", HandleSpellClick)
         end
 
         SpellChoiceTitle:Show()

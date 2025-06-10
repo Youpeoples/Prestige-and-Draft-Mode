@@ -166,6 +166,7 @@ local function ShowMainMenu(player, creature)
     player:GossipClearMenu()
     player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_QuestionMark:20|t |cffffff00What is Prestige?", 1, 1)
     player:GossipMenuAddItem(5, "|TInterface\\Icons\\Achievement_BG_winAB:20|t |cff3399ffI would like to Prestige!", 1, 2)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Gear_01:20|t |cff66ff66Show My Draft Stats", 1, 300)
     local guid = player:GetGUIDLow()
     local result = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
     if result and result:GetUInt32(0) == 1 then
@@ -620,6 +621,81 @@ local function OnGossipSelect(event, player, creature, sender, intid)
     elseif intid == 103 then
         if HasActivePetBlockPrestige(player) then return end
         DoPrestige(player, false, true)  -- false = not draft, true = taskmaster
+    elseif intid == 300 then
+        player:GossipClearMenu()
+        player:GossipMenuAddItem(5, "|TInterface\\Icons\\Spell_Holy_SurgeOfLight:20|t Show My Drafted Spells", 1, 301)
+        player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Scroll_03:20|t Show My Banned Spells", 1, 302)
+
+        -- Show reroll count
+        local statsQuery = CharDBQuery("SELECT rerolls FROM prestige_stats WHERE player_id = " .. guid)
+        local rerolls = statsQuery and statsQuery:GetUInt32(0) or 0
+        player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_CoinBag_01:16|t |cff000000Rerolls Remaining:|r " .. rerolls, 1, 998)
+
+        -- Show ban count
+        local bansQuery = CharDBQuery("SELECT bans FROM prestige_stats WHERE player_id = " .. guid)
+        local banCount = bansQuery and bansQuery:GetUInt32(0) or 0
+        player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Gear_01:16|t |cff000000Bans Remaining:|r " .. banCount, 1, 998)
+
+        player:GossipMenuAddItem(0, "Back", 1, 0)
+        player:GossipSendMenu(1, creature)
+
+    elseif intid == 301 then
+        local q = CharDBQuery("SELECT spell_id FROM drafted_spells WHERE player_guid = " .. guid)
+        player:GossipClearMenu()
+        player:GossipMenuAddItem(0, "|cff000000Your Drafted Spells:|r", 1, 998)
+        local seenNames = {}
+
+        if q then
+            repeat
+                local spellId = q:GetUInt32(0)
+                local nameResult = WorldDBQuery("SELECT Name_Lang_enUS FROM dbc_spells WHERE ID = " .. spellId)
+                local name = nameResult and nameResult:GetString(0) or ("Unknown Spell [" .. spellId .. "]")
+
+                if not seenNames[name] then
+                    seenNames[name] = true
+                    player:GossipMenuAddItem(5, name, 1, 998)
+                end
+            until not q:NextRow()
+        else
+            player:GossipMenuAddItem(0, "No drafted spells found.", 1, 998)
+        end
+
+        player:GossipMenuAddItem(0, "Back", 1, 300)
+        player:GossipSendMenu(1, creature)
+
+    elseif intid == 302 then
+
+        local q = CharDBQuery("SELECT spell_id FROM draft_bans WHERE player_id = " .. guid)
+        player:GossipClearMenu()
+        player:GossipMenuAddItem(0, "|cff3366ccClicking on a spell here will remove it from your ban list|r", 1, 998)
+        player:GossipMenuAddItem(0, "|cff000000Your Banned Spells:|r", 1, 998)
+
+        if q then
+            repeat
+                local spellId = q:GetUInt32(0)
+                local nameResult = WorldDBQuery("SELECT Name_Lang_enUS FROM dbc_spells WHERE ID = " .. spellId)
+                local name = nameResult and nameResult:GetString(0) or ("Unknown Spell [" .. spellId .. "]")
+
+                player:GossipMenuAddItem(5, name .. " (" .. spellId .. ")", 1, 100000 + spellId)
+            until not q:NextRow()
+        else
+            player:GossipMenuAddItem(0, "No banned spells found.", 1, 998)
+        end
+        player:GossipMenuAddItem(0, "Back", 1, 300)
+        player:GossipSendMenu(1, creature) 
+  elseif intid >= 100000 then
+    local spellId = intid - 100000
+    CharDBExecute("DELETE FROM draft_bans WHERE player_id = " .. guid .. " AND spell_id = " .. spellId)
+    player:SendBroadcastMessage("Removed banned spell ID: " .. spellId)
+
+    -- Go back to the Draft Stats submenu (intid 300)
+    player:GossipClearMenu()
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\Spell_Holy_SurgeOfLight:20|t Show My Drafted Spells", 1, 301)
+    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Scroll_03:20|t Show My Banned Spells", 1, 302)
+    player:GossipMenuAddItem(0, "Back", 1, 0)
+    player:GossipSendMenu(1, creature)
+
+
     end
 end
 

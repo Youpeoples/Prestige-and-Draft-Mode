@@ -1,4 +1,6 @@
 dofile("lua_scripts/prestige_and_spell_choice_config.lua")
+local DRAFT_MODE_SPELLS = CONFIG.DRAFT_MODE_SPELLS
+local DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL = CONFIG.DRAFT_REROLLS_GAINED_PER_PRESTIGE_LEVEL
 local INCLUDE_RARITY_5 = CONFIG.INCLUDE_RARITY_5
 local REROLLS_PER_LEVELUP = CONFIG.REROLLS_PER_LEVELUP
 local POOL_AMOUNT = CONFIG.POOL_AMOUNT
@@ -46,7 +48,7 @@ local function GetRandomSpells(num, guid, excludeSet)
     end
 
     if #result < num then
-        print(string.format("[SpellChoice] Warning: Only %d/%d unique spells found for player %d", #result, num, guid))
+        --print(string.format("[SpellChoice] Warning: Only %d/%d unique spells found for player %d", #result, num, guid))
     end
     return result
 end
@@ -82,7 +84,7 @@ local function LoadSpellsFromDB(guid)
         CharDBExecute(string.format("UPDATE prestige_stats SET offered_spell_1 = %d, offered_spell_2 = %d, offered_spell_3 = %d WHERE player_id = %d",
             spells[1] or 0, spells[2] or 0, spells[3] or 0, guid))
 
-        print(string.format("[SpellChoice] Replaced banned spells on load for player %d → %d,%d,%d", guid, spells[1] or 0, spells[2] or 0, spells[3] or 0))
+        --print(string.format("[SpellChoice] Replaced banned spells on load for player %d → %d,%d,%d", guid, spells[1] or 0, spells[2] or 0, spells[3] or 0))
     end
 
     currentDraftChoices[guid] = spells
@@ -391,7 +393,18 @@ local function OnLevelUp(event, player, oldLevel)
     if not result or result:GetUInt32(0) < 1 then
         return
     end
-
+    do
+    local level = player:GetLevel()
+    local expectedTarget = DRAFT_MODE_SPELLS + (level - 2)
+    local check = CharDBQuery("SELECT total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
+    if check then
+        local currentExpected = check:GetUInt32(0)
+        if currentExpected < expectedTarget then
+            CharDBExecute(string.format("UPDATE prestige_stats SET total_expected_drafts = %d WHERE player_id = %d", expectedTarget, guid))
+            --print(string.format("[SpellChoice] Adjusted total_expected_drafts to %d for player %s (level %d)", expectedTarget, player:GetName(), level))
+        end
+    end
+end
     -- Prevent spell choice at level 1
     -- if player:GetLevel() == 1 then
     --     return
