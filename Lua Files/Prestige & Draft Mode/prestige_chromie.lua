@@ -166,10 +166,10 @@ local function ShowMainMenu(player, creature)
     player:GossipClearMenu()
     player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_QuestionMark:20|t |cffffff00What is Prestige?", 1, 1)
     player:GossipMenuAddItem(5, "|TInterface\\Icons\\Achievement_BG_winAB:20|t |cff3399ffI would like to Prestige!", 1, 2)
-    player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Gear_01:20|t |cff66ff66Show My Draft Stats", 1, 300)
     local guid = player:GetGUIDLow()
     local result = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
     if result and result:GetUInt32(0) == 1 then
+        player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Gear_01:20|t |cff66ff66Show My Draft Stats", 1, 300)
         player:GossipMenuAddItem(5, "|TInterface\\Icons\\INV_Misc_Head_Human_01:20|t " .. RED .. "I want to QUIT DRAFT", 1, 200)
     end
 

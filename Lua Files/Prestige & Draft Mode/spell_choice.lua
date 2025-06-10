@@ -5,6 +5,13 @@ local INCLUDE_RARITY_5 = CONFIG.INCLUDE_RARITY_5
 local REROLLS_PER_LEVELUP = CONFIG.REROLLS_PER_LEVELUP
 local POOL_AMOUNT = CONFIG.POOL_AMOUNT
 local RARITY_DISTRIBUTION = CONFIG.RARITY_DISTRIBUTION
+local protectedSpellIds = { -- Riding Training
+  [54197] = true,
+  [33388] = true,
+  [33391] = true,
+  [34090] = true,
+  [34091] = true,
+}
 -- Tracks which players are actively “drafting” a spell (so we don’t block those)
 local draftingPlayers = {}
 
@@ -262,12 +269,6 @@ local function LoadValidSpellChoices(player, maxLevel)
 
 end
 
-
-
-
-
-
-
 -- Utility: check if table contains value
 local function tableContains(tbl, val)
     for _, v in ipairs(tbl) do
@@ -276,49 +277,46 @@ local function tableContains(tbl, val)
     return false
 end
 -- Prevent players in Draft Mode from learning new spells (via trainer or other means)
+
 local function OnLearnSpell(event, player, spellId)
     local guid = player:GetGUIDLow()
 
-    -- 1) If this LearnSpell was triggered by our draft system, allow it immediately:
+    -- If this LearnSpell was triggered by our draft system, allow it immediately:
     if draftingPlayers[guid] then
         return
     end
 
-    -- 2) Otherwise, check if the player is flagged draft_state = 1:
-    local res = CharDBQuery(
-        "SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid
-    )
+    -- b) Check if the player is in Draft Mode
+    local res = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
     if res and res:GetUInt32(0) == 1 then
-        -- a) Tell the player it’s blocked:
+        -- Allow protected spells through
+        if protectedSpellIds[spellId] then
+            print("[SpellBlock] Allowed protected spell " .. spellId .. " in Draft Mode.")
+            return
+        end
+
+        -- Block all other spells
         player:SendBroadcastMessage("You cannot learn new spells while in Draft Mode.")
 
-        -- b) Instead of removing immediately, schedule it 0.5s later:
+        --  Delay the removal slightly
         CreateLuaEvent(function()
-            -- Re‐grab the player object (they might have logged off)
             local p = GetPlayerByGUID(guid)
-            if not p then
-                return
-            end
+            if not p then return end
 
-            -- Remove from their in‐memory spellbook:
             p:RemoveSpell(spellId)
-
-            -- Permanently delete from the database so the trainer UI never shows it:
-            CharDBExecute(
-                "DELETE FROM character_spell WHERE guid = " .. guid .. " AND spell = " .. spellId
-            )
+            CharDBExecute("DELETE FROM character_spell WHERE guid = " .. guid .. " AND spell = " .. spellId)
 
             print("[SpellBlock] (delayed) Removed spell " .. spellId .. " from " .. p:GetName())
-        end, 250, 1)  -- 500 ms delay, fire once
+        end, 250, 1)
 
-        -- c) Mark it “just blocked,” in case your rank‐up logic needs to know:
+        -- Track it in justBlockedSpells
         justBlockedSpells[guid] = justBlockedSpells[guid] or {}
         justBlockedSpells[guid][spellId] = true
 
         print("[SpellBlock] Scheduled removal of spell " .. spellId .. " for " .. player:GetName())
     end
-
 end
+
 
 local function UpgradeKnownSpells(player)
     local level = player:GetLevel()
