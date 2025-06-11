@@ -106,6 +106,7 @@ Follow these steps on your server machine:
    ```sql
    -- world DB
    SOURCE "Sql & Serverside Files/SQL/acore_world/prestige_draft_specific_tables.sql";
+   SOURCE "Sql & Serverside Files/SQL/acore_world/Professions_Allow_Patch.sql";
    ```
 
    Adds read-only tables used exclusively by the mod.

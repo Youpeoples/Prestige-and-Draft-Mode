@@ -28,6 +28,9 @@
    * Run `prestige_draft_specific_tables.sql` against your **world** database.
    * This adds three read-only tables used only by the Prestige & Draft system—no existing data is modified.
 
+   * Run 'Professions_Allow_Patch.sql' against your **world** database.
+   * This adds permissiosn to all profession/pattern/recipe based spells so they're not auto deleted during draft mode. 
+
 5. **Deploy DBC Overrides**
 
    * Copy **all** `.dbc` files from `Sql&ServersideFiles/DBC/` into your server’s `Data/dbc/` folder.
