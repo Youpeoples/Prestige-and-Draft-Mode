@@ -402,7 +402,6 @@ local function UpgradeKnownSpells(player)
                         else
                             justBlockedSpells[guid][candidateId] = nil
                         end
-                        ::continueRanks::
                     end
                 until not rankQuery:NextRow()
             end
