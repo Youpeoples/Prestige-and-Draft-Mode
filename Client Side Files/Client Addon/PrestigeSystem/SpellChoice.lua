@@ -99,7 +99,7 @@ local function HandleSpellClick(self)
     return
   end
 
-  -- 🔥 Selection animation block
+  -- Selection animation block
   for _, otherBtn in ipairs(buttons) do
     if otherBtn ~= self then
       otherBtn:EnableMouse(false)
@@ -419,7 +419,9 @@ for _, btn in ipairs(buttons) do
       GameTooltip:Show()
     end
   end)
-
+  btn:SetScript("OnLeave", function(self)
+    GameTooltip:Hide()
+  end)
 btn:SetScript("OnClick", HandleSpellClick)
 end
 

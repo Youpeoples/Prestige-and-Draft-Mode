@@ -5,18 +5,51 @@ local INCLUDE_RARITY_5 = CONFIG.INCLUDE_RARITY_5
 local REROLLS_PER_LEVELUP = CONFIG.REROLLS_PER_LEVELUP
 local POOL_AMOUNT = CONFIG.POOL_AMOUNT
 local RARITY_DISTRIBUTION = CONFIG.RARITY_DISTRIBUTION
-local protectedSpellIds = { -- Riding Training
-  [54197] = true,
-  [33388] = true,
-  [33391] = true,
-  [34090] = true,
-  [34091] = true,
+local protectedSpellIds = { 
+  -- Riding Training
+  [54197]=true, [33388]=true, [33391]=true, [34090]=true, [34091]= true,
+   -- Alchemy
+  [2259]=true, [3101]=true, [3464]=true, [11611]=true, [28596]=true, [51304]=true,
+  -- Herbalism
+  [2366]=true, [2368]=true, [3570]=true, [11993]=true, [28695]=true, [50300]=true,
+  -- Herbalism Extras
+  [2383]=true, [32605]=true,
+  -- Enchanting
+  [7411]=true, [7412]=true, [7413]=true, [13920]=true, [28029]=true, [51313]=true,
+  -- Enchanting Extras
+  [13262]=true,
+  -- Blacksmithing
+  [2018]=true, [3100]=true, [3538]=true, [9785]=true, [29844]=true, [51300]=true,
+  -- Inscription
+  [45357]=true, [45358]=true, [45359]=true, [45360]=true, [45361]=true, [45363]=true,
+  --Inscription Extras
+  [55005]=true,
+  -- Engineering
+  [4036]=true, [4037]=true, [4038]=true, [12656]=true, [30350]=true, [49383]=true, [51306]=true,
+  -- Skinning
+  [8163]=true, [8167]=true, [8168]=true, [10768]=true, [13697]=true, [32678]=true, [50305]=true, [52158]=true,
+  -- Tailoring
+  [3908]=true, [3909]=true, [3910]=true, [12180]=true, [26790]=true, [51309]=true,
+  -- Leatherworking
+  [2108]=true, [3104]=true, [3811]=true, [10662]=true, [32549]=true, [51302]=true,
+  -- Jewelcrafting
+  [25229]=true, [25230]=true, [28894]=true, [28895]=true, [28897]=true, [51311]=true,
+  -- Cooking
+  [2550]=true, [3102]=true, [3413]=true, [18260]=true, [33359]=true, [51296]=true,
+  -- Cooking Extras
+  [818]=true,
+  -- First Aid
+  [3273]=true, [3274]=true, [7924]=true, [10846]=true, [27028]=true, [45544]=true,
+  -- Fishing
+  [7620]=true, [7732]=true, [7731]=true, [18248]=true, [33095]=true, [51294]=true,
+  -- Fishing Extras
+  [7738]=true,
 }
 -- Tracks which players are actively “drafting” a spell (so we don’t block those)
 local draftingPlayers = {}
 
 -- Tracks which spells were just blocked from a trainer, so UpgradeKnownSpells will skip exactly those
--- indexed like: justBlockedSpells[guid][spellId] = true
+-- indexed like: justBlockedSpells[guid][spellId] = trueexcludedProfessionNames
 local justBlockedSpells = {}
 local lastSpellChoiceSent = {}
 
@@ -286,7 +319,7 @@ local function OnLearnSpell(event, player, spellId)
         return
     end
 
-    -- b) Check if the player is in Draft Mode
+    --  Check if the player is in Draft Mode
     local res = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
     if res and res:GetUInt32(0) == 1 then
         -- Allow protected spells through
@@ -294,7 +327,13 @@ local function OnLearnSpell(event, player, spellId)
             print("[SpellBlock] Allowed protected spell " .. spellId .. " in Draft Mode.")
             return
         end
-
+        -- Allow any spell whose rarity is 99 (our “requires‑reagent” marker)
+        do
+            local rq = WorldDBQuery("SELECT rarity FROM dbc_spells WHERE Id = " .. spellId)
+            if rq and rq:GetUInt32(0) == 99 then
+                return
+            end
+        end
         -- Block all other spells
         player:SendBroadcastMessage("You cannot learn new spells while in Draft Mode.")
 
@@ -349,7 +388,14 @@ local function UpgradeKnownSpells(player)
 
                     if candidateLvl <= level and not player:HasSpell(candidateId) then
                         local guid = player:GetGUIDLow()
-
+                          local nameQ = WorldDBQuery("SELECT Name_Lang_enUS FROM dbc_spells WHERE Id = " .. candidateId)
+                        if nameQ and not nameQ:IsNull(0) then
+                            local name = nameQ:GetString(0)
+                            if excludedProfessionNames[name] then
+                                --print("[SpellChoice] Skipping profession header: " .. name)
+                                goto continueRanks
+                            end
+                        end
                         if not (justBlockedSpells[guid] and justBlockedSpells[guid][candidateId]) then
                             CharDBExecute(
                                 "INSERT IGNORE INTO drafted_spells (player_guid, spell_id) VALUES (" .. guid .. ", " .. candidateId .. ")"
@@ -365,6 +411,7 @@ local function UpgradeKnownSpells(player)
                         else
                             justBlockedSpells[guid][candidateId] = nil
                         end
+                        ::continueRanks::
                     end
                 until not rankQuery:NextRow()
             end
