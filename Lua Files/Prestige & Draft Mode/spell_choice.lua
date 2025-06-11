@@ -49,7 +49,6 @@ local protectedSpellIds = {
 local draftingPlayers = {}
 
 -- Tracks which spells were just blocked from a trainer, so UpgradeKnownSpells will skip exactly those
--- indexed like: justBlockedSpells[guid][spellId] = trueexcludedProfessionNames
 local justBlockedSpells = {}
 local lastSpellChoiceSent = {}
 
@@ -388,14 +387,6 @@ local function UpgradeKnownSpells(player)
 
                     if candidateLvl <= level and not player:HasSpell(candidateId) then
                         local guid = player:GetGUIDLow()
-                          local nameQ = WorldDBQuery("SELECT Name_Lang_enUS FROM dbc_spells WHERE Id = " .. candidateId)
-                        if nameQ and not nameQ:IsNull(0) then
-                            local name = nameQ:GetString(0)
-                            if excludedProfessionNames[name] then
-                                --print("[SpellChoice] Skipping profession header: " .. name)
-                                goto continueRanks
-                            end
-                        end
                         if not (justBlockedSpells[guid] and justBlockedSpells[guid][candidateId]) then
                             CharDBExecute(
                                 "INSERT IGNORE INTO drafted_spells (player_guid, spell_id) VALUES (" .. guid .. ", " .. candidateId .. ")"
