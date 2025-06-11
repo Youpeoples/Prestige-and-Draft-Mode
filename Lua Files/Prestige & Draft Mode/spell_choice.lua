@@ -382,96 +382,133 @@ end
 
 -- Event: Player level-up
 local function OnLevelUp(event, player, oldLevel)
-    --print("[DEBUG] Player leveled up: " .. player:GetName())
+    -- 1) compute actual level gain
+    local newLevel = player:GetLevel()
+    local diff     = newLevel - oldLevel
+    if diff <= 0 then
+        return
+    end
 
     local guid = player:GetGUIDLow()
 
-    -- Block if player has not unlocked spell draft (draft_state < 1)
-    local result = CharDBQuery("SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid)
-    if not result or result:GetUInt32(0) < 1 then
+    -- 2) block if player hasn't unlocked spell draft
+    local stateQ = CharDBQuery(
+        "SELECT draft_state FROM prestige_stats WHERE player_id = " .. guid
+    )
+    if not stateQ or stateQ:GetUInt32(0) < 1 then
         return
     end
-    do
-    local level = player:GetLevel()
-    local expectedTarget = DRAFT_MODE_SPELLS + (level - 2)
-    local check = CharDBQuery("SELECT total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
-    if check then
-        local currentExpected = check:GetUInt32(0)
-        if currentExpected < expectedTarget then
-            CharDBExecute(string.format("UPDATE prestige_stats SET total_expected_drafts = %d WHERE player_id = %d", expectedTarget, guid))
-            --print(string.format("[SpellChoice] Adjusted total_expected_drafts to %d for player %s (level %d)", expectedTarget, player:GetName(), level))
-        end
-    end
-end
-    -- Prevent spell choice at level 1
-    -- if player:GetLevel() == 1 then
-    --     return
-    -- end
 
-    -- Increment expected drafts AND rerolls
-    CharDBQuery(string.format([[
-        INSERT INTO prestige_stats (player_id, successful_drafts, total_expected_drafts, draft_state, rerolls)
-        VALUES (%d, 0, 1, 1, %d)
+    -- 3) UPSERT: add `diff` new drafts and `diff * REROLLS_PER_LEVELUP` rerolls
+    local rerollsToAdd = diff * REROLLS_PER_LEVELUP
+    CharDBExecute(string.format([[
+        INSERT INTO prestige_stats
+          (player_id, successful_drafts, total_expected_drafts, draft_state, rerolls)
+        VALUES
+          (%d, 0, %d, 1, %d)
         ON DUPLICATE KEY UPDATE
-            total_expected_drafts = total_expected_drafts + 1,
-            rerolls = rerolls + %d;
-    ]], guid, REROLLS_PER_LEVELUP, REROLLS_PER_LEVELUP))
-    -- Send updated rerolls to client
-    local rerollQ = CharDBQuery("SELECT rerolls FROM prestige_stats WHERE player_id = " .. guid)
-    if rerollQ then
-      local rerolls = rerollQ:GetUInt32(0)
-      player:SendAddonMessage("SpellChoiceRerolls", tostring(rerolls), 0, player)
-    end
-    -- Check if player is due for a draft
-    local check = CharDBQuery("SELECT successful_drafts, total_expected_drafts FROM prestige_stats WHERE player_id = " .. guid)
-    if not check then return end
+          total_expected_drafts = total_expected_drafts + %d,
+          rerolls               = rerolls + %d;
+    ]], guid,
+       diff,
+       rerollsToAdd,
+       diff,
+       rerollsToAdd
+    ))
 
-    local successful = check:GetUInt32(0)
-    local expected = check:GetUInt32(1)
+    -- 4) SNAP total_expected_drafts exactly to DRAFT_MODE_SPELLS + (newLevel - 2)
+    local expectedTarget = DRAFT_MODE_SPELLS + (newLevel - 1)
+    CharDBExecute(string.format(
+        "UPDATE prestige_stats SET total_expected_drafts = %d WHERE player_id = %d;",
+        expectedTarget, guid
+    ))
 
-    if successful >= expected then
-        --print("[DEBUG] Player has no pending draft: " .. player:GetName())
-        return
-    end
-    local remaining = math.max(0, expected - successful)
-    player:SendAddonMessage("SpellChoiceDrafts", tostring(remaining), 0, player)
-    -- Reset and reload valid spell choices
-    -- Check if player already has pending spells
+    -- 5) delay UI update by 250ms so DB writes can settle
+    CreateLuaEvent(function()
+        local p = GetPlayerByGUID(guid)
+        if not p or not p:IsInWorld() then return end
+
+        -- send updated rerolls
+        local rerollQ = CharDBQuery(
+          "SELECT rerolls FROM prestige_stats WHERE player_id = " .. guid
+        )
+        if rerollQ then
+            p:SendAddonMessage(
+              "SpellChoiceRerolls",
+              tostring(rerollQ:GetUInt32(0)),
+              0, p
+            )
+        end
+
+        -- send updated drafts remaining
+        local draftQ = CharDBQuery(string.format([[
+          SELECT successful_drafts, total_expected_drafts
+          FROM prestige_stats
+          WHERE player_id = %d
+        ]], guid))
+        if draftQ then
+            local successful = draftQ:GetUInt32(0)
+            local expected   = draftQ:GetUInt32(1)
+            local remaining  = math.max(0, expected - successful)
+            p:SendAddonMessage(
+              "SpellChoiceDrafts",
+              tostring(remaining),
+              0, p
+            )
+        end
+    end, 250, 1)
+
+    -- 6) generate or resend spell choices
     local existing = LoadSpellsFromDB(guid)
     if not existing or existing[1] == 0 then
-        -- No pending spells, generate new ones
+        -- generate new draft
         ValidSpellChoices = {}
-        LoadValidSpellChoices(player, player:GetLevel())
+        LoadValidSpellChoices(player, newLevel)
 
         local spells = GetRandomSpells(3, guid)
         currentDraftChoices[guid] = spells
         SaveSpellsToDB(guid, spells)
 
         local data = table.concat(spells, ",")
-        --print("[DEBUG] New spells for " .. player:GetName() .. ": " .. data)
-        --player:SendBroadcastMessage("[DEBUG] Sending spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
+
         local rarityParts = {}
         for _, id in ipairs(spells) do
-            local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
-            table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+            local q = WorldDBQuery(
+              "SELECT Rarity FROM dbc_spells WHERE Id = " .. id
+            )
+            table.insert(
+              rarityParts,
+              (q and not q:IsNull(0)) and tostring(q:GetUInt8(0)) or "-1"
+            )
         end
-        player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
+        player:SendAddonMessage(
+          "SpellChoiceRarities",
+          table.concat(rarityParts, ","),
+          0, player
+        )
     else
-        --print("[DEBUG] Player already has pending draft. Resending existing spells.")
-
+        -- resend existing draft
         currentDraftChoices[guid] = existing
         local data = table.concat(existing, ",")
-        --player:SendBroadcastMessage("[DEBUG] Resending existing spell choices: " .. data)
         player:SendAddonMessage("SpellChoice", data, 0, player)
+
         local rarityParts = {}
         for _, id in ipairs(existing) do
-            local q = WorldDBQuery("SELECT Rarity FROM dbc_spells WHERE Id = " .. id)
-            table.insert(rarityParts, q and (q:IsNull(0) and "-1" or tostring(q:GetUInt8(0))) or "-1")
+            local q = WorldDBQuery(
+              "SELECT Rarity FROM dbc_spells WHERE Id = " .. id
+            )
+            table.insert(
+              rarityParts,
+              (q and not q:IsNull(0)) and tostring(q:GetUInt8(0)) or "-1"
+            )
         end
-        player:SendAddonMessage("SpellChoiceRarities", table.concat(rarityParts, ","), 0, player)
+        player:SendAddonMessage(
+          "SpellChoiceRarities",
+          table.concat(rarityParts, ","),
+          0, player
+        )
     end
-
 end
 
 
