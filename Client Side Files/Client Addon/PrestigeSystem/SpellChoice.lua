@@ -589,7 +589,12 @@ end)
 
 local flash = SpellChoiceFrame:CreateTexture(nil, "OVERLAY")
 flash:SetAllPoints(SpellChoiceFrame)
-flash:SetColorTexture(1, 1, 1)
+if flash.SetColorTexture then
+    flash:SetColorTexture(1, 1, 1)
+else
+    flash:SetTexture("Interface\\Buttons\\WHITE8x8")
+    flash:SetVertexColor(1, 1, 1)
+end
 flash:SetAlpha(0)
 UIFrameFadeIn(flash, 0.1, 0, 0.8)
 Delay(0.1, function()
