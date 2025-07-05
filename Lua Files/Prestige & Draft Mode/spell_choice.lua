@@ -132,11 +132,14 @@ end
 
 
 local function SaveSpellsToDB(guid, spells)
+    local s1 = spells[1] or 0
+    local s2 = spells[2] or 0
+    local s3 = spells[3] or 0
     CharDBExecute(string.format([[
         UPDATE prestige_stats
         SET offered_spell_1 = %d, offered_spell_2 = %d, offered_spell_3 = %d
         WHERE player_id = %d
-    ]], spells[1], spells[2], spells[3], guid))
+    ]], s1, s2, s3, guid))
 end
 
 local function isLocationEffect(spell)
